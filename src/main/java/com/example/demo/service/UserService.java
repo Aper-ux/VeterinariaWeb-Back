@@ -170,4 +170,21 @@ public class UserService {
         response.setActive(user.isActive());
         return response;
     }
+
+    public void updateUserProfile(UpdateProfileRequest request, String uid) {
+        try {
+
+            User user = getFirestore().collection("users").document(uid).get().get().toObject(User.class);
+            if (user == null) {
+                throw new CustomExceptions.UserNotFoundException("User not found with id: " + uid);
+            }
+            user.setNombre(request.getNombre());
+            user.setApellido(request.getApellido());
+            user.setTelefono(request.getTelefono());
+            user.setDireccion(request.getDireccion());
+            getFirestore().collection("users").document(uid).set(user).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new CustomExceptions.ProcessingException("Error updating user profile: " + e.getMessage());
+        }
+    }
 }

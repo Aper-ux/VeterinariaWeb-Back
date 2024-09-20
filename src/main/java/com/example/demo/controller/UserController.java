@@ -1,10 +1,14 @@
 package com.example.demo.controller;
 
+import com.example.demo.dto.ApiResponse;
 import com.example.demo.dto.UserDTOs.*;
 import com.example.demo.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
 
 
 @RestController
@@ -15,45 +19,52 @@ public class UserController {
     private UserService userService;
 
     @GetMapping
-    public ResponseEntity<?> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
+        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers()));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> getUserById(@PathVariable String id) {
-        return ResponseEntity.ok(userService.getUserById(id));
+    public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable String id, @RequestBody UpdateUserRequest request) {
-        return ResponseEntity.ok(userService.updateUser(id, request));
+    public ResponseEntity<ApiResponse<UserResponse>> updateUser(@PathVariable String id, @RequestBody UpdateUserRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(userService.updateUser(id, request)));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteUser(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String id) {
         userService.deleteUser(id);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PostMapping("/{id}/change-password")
-    public ResponseEntity<?> changePassword(@PathVariable String id, @RequestBody ChangePasswordRequest request) {
+    public ResponseEntity<ApiResponse<Void>> changePassword(@PathVariable String id, @RequestBody ChangePasswordRequest request) {
         userService.changePassword(id, request);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PostMapping("/{id}/toggle-status")
-    public ResponseEntity<?> toggleUserStatus(@PathVariable String id, @RequestBody ToggleUserStatusRequest request) {
-        return ResponseEntity.ok(userService.toggleUserStatus(id, request));
+    public ResponseEntity<ApiResponse<UserResponse>> toggleUserStatus(@PathVariable String id, @RequestBody ToggleUserStatusRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(userService.toggleUserStatus(id, request)));
     }
 
     @PostMapping("/{id}/notes")
-    public ResponseEntity<?> addNote(@PathVariable String id, @RequestBody AddNoteRequest request) {
+    public ResponseEntity<ApiResponse<Void>> addNote(@PathVariable String id, @RequestBody AddNoteRequest request) {
         userService.addNote(id, request);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @GetMapping("/{id}/notes")
-    public ResponseEntity<?> getUserNotes(@PathVariable String id) {
-        return ResponseEntity.ok(userService.getUserNotes(id));
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getUserNotes(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getUserNotes(id)));
     }
+
+    @PutMapping("/me")
+    public ResponseEntity<ApiResponse<Void>> updateUserProfile(@RequestBody UpdateProfileRequest request, @PathVariable String id) {
+        userService.updateUserProfile(request, id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
 }

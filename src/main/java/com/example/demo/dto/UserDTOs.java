@@ -50,4 +50,18 @@ public class UserDTOs {
         @NotBlank(message = "El contenido de la nota es obligatorio")
         private String content;
     }
+
+    @Data
+    public static class RolePermissionDTO {
+        private String role;
+        private List<String> permissions;
+    }
+
+    @Data
+    public static class UpdateProfileRequest {
+        private String nombre;
+        private String apellido;
+        private String telefono;
+        private String direccion;
+    }
 }
