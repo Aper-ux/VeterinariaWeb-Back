@@ -28,7 +28,9 @@ public class AuthDTOs {
         @NotBlank(message = "El apellido es obligatorio")
         private String apellido;
 
+        @NotBlank(message = "telefono es obligatorio")
         private String telefono;
+        @NotBlank(message = "direccion es obligatoria")
         private String direccion;
         private List<Role> roles;
     }

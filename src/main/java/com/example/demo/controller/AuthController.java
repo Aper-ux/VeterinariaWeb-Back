@@ -29,8 +29,8 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logoutUser(@RequestParam String uid) {
-        authService.logout(uid);
+    public ResponseEntity<ApiResponse<Void>> logoutUser() {
+        authService.logout();
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

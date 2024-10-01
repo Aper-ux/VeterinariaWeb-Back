@@ -6,9 +6,7 @@ import com.example.demo.model.Role;
 import com.example.demo.service.RolePermissionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
@@ -20,9 +18,14 @@ public class RoleController {
     @Autowired
     private RolePermissionService rolePermissionService;
 
-    @GetMapping("/permissions")
-    public ResponseEntity<ApiResponse<Map<Role, List<String>>>> getAllRolePermissions() {
-        Map<Role, List<String>> roles = rolePermissionService.getAllRolePermissions();
-        return ResponseEntity.ok(ApiResponse.success(roles));
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<UserDTOs.RolePermissionDTO>>> getAllRolePermissions() {
+        return ResponseEntity.ok(ApiResponse.success(rolePermissionService.getAllRolePermissions()));
+    }
+    @PutMapping("/{role}")
+    public ResponseEntity<ApiResponse<UserDTOs.RolePermissionDTO>> updateRolePermissions(
+            @PathVariable String role,
+            @RequestBody List<String> permissions) {
+        return ResponseEntity.ok(ApiResponse.success(rolePermissionService.updateRolePermissions(role, permissions)));
     }
 }

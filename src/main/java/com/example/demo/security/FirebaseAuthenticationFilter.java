@@ -17,9 +17,15 @@ import java.util.List;
 
 public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
+        if (request.getRequestURI().contains("/api/auth/login") ||
+                request.getRequestURI().contains("/api/auth/register")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         String authorizationHeader = request.getHeader("Authorization");
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             String idToken = authorizationHeader.substring(7);
@@ -38,7 +44,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
                 }
 
                 if (authorities.isEmpty()) {
-                    authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                    authorities.add(new SimpleGrantedAuthority("ROLE_CLENTE"));
                 }
 
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -51,7 +57,12 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
                 System.out.println("Error en la autenticación: " + e.getMessage());
                 e.printStackTrace();
             }
+        } else {
+            // Si no hay token y no es una ruta pública, rechazar la solicitud
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
         }
         filterChain.doFilter(request, response);
     }
+
 }

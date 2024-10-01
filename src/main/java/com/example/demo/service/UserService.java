@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.AuthDTOs.RegisterRequest;
+import com.example.demo.dto.PetDTOs;
 import com.example.demo.dto.UserDTOs.*;
 import com.example.demo.exception.CustomExceptions;
 import com.example.demo.model.Role;
@@ -10,6 +11,10 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.UserRecord;
 import com.google.firebase.cloud.FirestoreClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -18,6 +23,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class UserService {
+    @Autowired
+    PetService petService;
 
     private Firestore getFirestore() {
         return FirestoreClient.getFirestore();
@@ -33,40 +40,30 @@ public class UserService {
         }
     }
 
-    public UserResponse createUser(String uid, RegisterRequest request) {
-        User user = new User();
-        user.setUid(uid);
-        user.setEmail(request.getEmail());
-        user.setNombre(request.getNombre());
-        user.setApellido(request.getApellido());
-        user.setTelefono(request.getTelefono());
-        user.setDireccion(request.getDireccion());
-
-        List<Role> roles = Optional.ofNullable(request.getRoles())
-                .map(roleList -> roleList.stream()
-                        .filter(Objects::nonNull)
-                        .map(Object::toString)
-                        .map(roleString -> {
-                            try {
-                                return Role.valueOf(roleString.toUpperCase());
-                            } catch (IllegalArgumentException e) {
-                                System.out.println("Invalid role: " + roleString);
-                                return null;
-                            }
-                        })
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toList()))
-                .orElse(Collections.singletonList(Role.CLIENTE));
-
-        user.setRoles(roles);
-        user.setEnabled(true);
-        user.setActive(true);
-
+    public UserResponse createUser(RegisterRequest request) {
         try {
-            getFirestore().collection("users").document(uid).set(user).get();
+            UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
+                    .setEmail(request.getEmail())
+                    .setPassword(request.getPassword())
+                    .setDisplayName(request.getNombre() + " " + request.getApellido());
+
+            UserRecord userRecord = FirebaseAuth.getInstance().createUser(createRequest);
+
+            User user = new User();
+            user.setUid(userRecord.getUid());
+            user.setEmail(request.getEmail());
+            user.setNombre(request.getNombre());
+            user.setApellido(request.getApellido());
+            user.setTelefono(request.getTelefono());
+            user.setDireccion(request.getDireccion());
+            user.setRoles(request.getRoles());
+            user.setEnabled(true);
+            user.setActive(true);
+
+            getFirestore().collection("users").document(userRecord.getUid()).set(user).get();
             return convertToUserResponse(user);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new CustomExceptions.ProcessingException("Error saving user to Firestore: " + e.getMessage());
+        } catch (FirebaseAuthException | InterruptedException | ExecutionException e) {
+            throw new CustomExceptions.ProcessingException("Error creating user: " + e.getMessage());
         }
     }
 
@@ -82,12 +79,15 @@ public class UserService {
         }
     }
 
-    public List<UserResponse> getAllUsers() {
+    public List<UserResponse> getAllUsers(Boolean isActive, String role) {
         try {
             List<UserResponse> users = new ArrayList<>();
             getFirestore().collection("users").get().get().getDocuments().forEach(doc -> {
                 User user = doc.toObject(User.class);
-                users.add(convertToUserResponse(user));
+                if ((isActive == null || user.isActive() == isActive) &&
+                        (role == null || user.getRoles().contains(Role.valueOf(role.toUpperCase())))) {
+                    users.add(convertToUserResponse(user));
+                }
             });
             return users;
         } catch (InterruptedException | ExecutionException e) {
@@ -170,10 +170,10 @@ public class UserService {
         response.setActive(user.isActive());
         return response;
     }
-
-    public void updateUserProfile(UpdateProfileRequest request, String uid) {
+    /*
+    public UserResponse updateUserProfile(UpdateProfileRequest request) {
+        String uid = getCurrentUserUid();
         try {
-
             User user = getFirestore().collection("users").document(uid).get().get().toObject(User.class);
             if (user == null) {
                 throw new CustomExceptions.UserNotFoundException("User not found with id: " + uid);
@@ -182,9 +182,59 @@ public class UserService {
             user.setApellido(request.getApellido());
             user.setTelefono(request.getTelefono());
             user.setDireccion(request.getDireccion());
+
             getFirestore().collection("users").document(uid).set(user).get();
+            return convertToUserResponse(user);
         } catch (InterruptedException | ExecutionException e) {
             throw new CustomExceptions.ProcessingException("Error updating user profile: " + e.getMessage());
         }
+    }
+
+     */
+    public boolean existsByEmail(String email) {
+        try {
+            return getFirestore().collection("users")
+                    .whereEqualTo("email", email)
+                    .get()
+                    .get()
+                    .size() > 0;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new CustomExceptions.ProcessingException("Error checking user existence: " + e.getMessage());
+        }
+    }
+    private String getCurrentUserUid() {
+        // Obtener el contexto de seguridad actual
+        SecurityContext securityContext = SecurityContextHolder.getContext();
+        Authentication authentication = securityContext.getAuthentication();
+
+        // Verificar si hay un usuario autenticado
+        if (authentication != null && authentication.isAuthenticated()) {
+            // El nombre principal en este caso será el UID de Firebase
+            return authentication.getName();
+        }
+
+        // Si no hay usuario autenticado, lanzar una excepción
+        throw new CustomExceptions.AuthenticationException("No authenticated user found");
+    }
+    public UserResponse updateUserProfile(UpdateProfileRequest request) {
+        String uid = getCurrentUserUid();
+        try {
+            User user = getFirestore().collection("users").document(uid).get().get().toObject(User.class);
+            if (user == null) {
+                throw new CustomExceptions.UserNotFoundException("User not found with id: " + uid);
+            }
+            user.setNombre(request.getNombre());
+            user.setApellido(request.getApellido());
+            user.setTelefono(request.getTelefono());
+            user.setDireccion(request.getDireccion());
+
+            getFirestore().collection("users").document(uid).set(user).get();
+            return convertToUserResponse(user);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new CustomExceptions.ProcessingException("Error updating user profile: " + e.getMessage());
+        }
+    }
+    public List<PetDTOs.PetResponse> getUserPets(String userId) {
+        return petService.getPetsByUserId(userId);
     }
 }

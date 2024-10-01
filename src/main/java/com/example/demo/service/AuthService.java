@@ -7,9 +7,11 @@ import com.example.demo.exception.CustomExceptions;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 
+import com.google.firebase.auth.FirebaseToken;
 import com.google.firebase.auth.UserRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -24,6 +26,8 @@ public class AuthService {
 
     @Autowired
     private UserService userService;
+    @Autowired
+    private FirebaseAuth firebaseAuth;
 
     @Value("${firebase.api.key}")
     private String firebaseApiKey;
@@ -36,14 +40,32 @@ public class AuthService {
 
     public AuthResponse registerUser(RegisterRequest request) {
         try {
+            UserRecord userRecord;
             UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
                     .setEmail(request.getEmail())
                     .setPassword(request.getPassword())
                     .setDisplayName(request.getNombre() + " " + request.getApellido());
 
-            UserRecord userRecord = FirebaseAuth.getInstance().createUser(createRequest);
+            try {
+                // Intentar crear el usuario
+                userRecord = FirebaseAuth.getInstance().createUser(createRequest);
+            } catch (FirebaseAuthException e) {
+                if ("auth/email-already-exists".equals(e.getErrorCode())) {
+                    // Si el email existe, intentamos obtener el usuario
+                    userRecord = FirebaseAuth.getInstance().getUserByEmail(request.getEmail());
+                    // Si el usuario existe en Auth pero no en Firestore, lo eliminamos y creamos uno nuevo
+                    if (!userService.existsByEmail(request.getEmail())) {
+                        FirebaseAuth.getInstance().deleteUser(userRecord.getUid());
+                        userRecord = FirebaseAuth.getInstance().createUser(createRequest);
+                    } else {
+                        throw new CustomExceptions.EmailAlreadyExistsException("Email already in use");
+                    }
+                } else {
+                    throw e;
+                }
+            }
 
-            UserResponse user = userService.createUser(userRecord.getUid(), request);
+            UserResponse user = userService.createUser(request);
 
             List<String> rolesWithPrefix = user.getRoles().stream()
                     .map(role -> "ROLE_" + role.name())
@@ -61,7 +83,6 @@ public class AuthService {
             throw new CustomExceptions.AuthenticationException("Error during user registration: " + e.getMessage());
         }
     }
-
     public AuthResponse loginUser(LoginRequest request) {
         try {
             // Obtener el usuario por correo electrónico
@@ -117,12 +138,24 @@ public class AuthService {
 
 
 
-    public void logout(String uid) {
+    public void logout() {
+        // Obtener el token actual del contexto de seguridad
+        String token =  SecurityContextHolder.getContext().getAuthentication().getCredentials().toString();
+
         try {
+            // Verificar y obtener el UID del token
+            FirebaseToken decodedToken = firebaseAuth.verifyIdToken(token);
+            String uid = decodedToken.getUid();
+
             // Revocar todos los tokens del usuario
-            FirebaseAuth.getInstance().revokeRefreshTokens(uid);
+            firebaseAuth.revokeRefreshTokens(uid);
+
+            // Limpiar el contexto de seguridad
+            SecurityContextHolder.clearContext();
+
         } catch (FirebaseAuthException e) {
-            throw new CustomExceptions.AuthenticationException("Error during user logout: " + e.getMessage());
+            // Manejar cualquier error de autenticación
+            throw new RuntimeException("Error al cerrar sesión", e);
         }
     }
 
