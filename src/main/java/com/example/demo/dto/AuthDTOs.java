@@ -14,6 +14,7 @@ public class AuthDTOs {
 
     @Data
     public static class RegisterRequest {
+        private String uid;
         @NotBlank(message = "El email es obligatorio")
         @Email(message = "El email debe ser válido")
         private String email;

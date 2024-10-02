@@ -38,33 +38,65 @@ public class AuthService {
         this.webClient = webClientBuilder.baseUrl("https://identitytoolkit.googleapis.com/v1").build();
     }
 
+//    public AuthResponse registerUser(RegisterRequest request) {
+//        try {
+//            UserRecord userRecord;
+//            UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
+//                    .setEmail(request.getEmail())
+//                    .setPassword(request.getPassword())
+//                    .setDisplayName(request.getNombre() + " " + request.getApellido());
+//
+//            try {
+//                // Intentar crear el usuario
+//                userRecord = FirebaseAuth.getInstance().createUser(createRequest);
+//            } catch (FirebaseAuthException e) {
+//                if ("auth/email-already-exists".equals(e.getErrorCode())) {
+//                    // Si el email existe, intentamos obtener el usuario
+//                    userRecord = FirebaseAuth.getInstance().getUserByEmail(request.getEmail());
+//                    // Si el usuario existe en Auth pero no en Firestore, lo eliminamos y creamos uno nuevo
+//                    if (!userService.existsByEmail(request.getEmail())) {
+//                        FirebaseAuth.getInstance().deleteUser(userRecord.getUid());
+//                        userRecord = FirebaseAuth.getInstance().createUser(createRequest);
+//                    } else {
+//                        throw new CustomExceptions.EmailAlreadyExistsException("Email already in use");
+//                    }
+//                } else {
+//                    throw e;
+//                }
+//            }
+//
+//            UserResponse user = userService.createUser(request);
+//
+//            List<String> rolesWithPrefix = user.getRoles().stream()
+//                    .map(role -> "ROLE_" + role.name())
+//                    .collect(Collectors.toList());
+//
+//            Map<String, Object> claims = new HashMap<>();
+//            claims.put("roles", rolesWithPrefix);
+//            FirebaseAuth.getInstance().setCustomUserClaims(userRecord.getUid(), claims);
+//
+//            String customToken = FirebaseAuth.getInstance().createCustomToken(userRecord.getUid());
+//            String idToken = exchangeCustomTokenForIdToken(customToken);
+//
+//            return new AuthResponse(idToken, user);
+//        } catch (FirebaseAuthException e) {
+//            throw new CustomExceptions.AuthenticationException("Error during user registration: " + e.getMessage());
+//        }
+//    }
     public AuthResponse registerUser(RegisterRequest request) {
         try {
-            UserRecord userRecord;
+            System.out.println("Attempting to create user with email: " + request.getEmail());
             UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
                     .setEmail(request.getEmail())
                     .setPassword(request.getPassword())
                     .setDisplayName(request.getNombre() + " " + request.getApellido());
 
-            try {
-                // Intentar crear el usuario
-                userRecord = FirebaseAuth.getInstance().createUser(createRequest);
-            } catch (FirebaseAuthException e) {
-                if ("auth/email-already-exists".equals(e.getErrorCode())) {
-                    // Si el email existe, intentamos obtener el usuario
-                    userRecord = FirebaseAuth.getInstance().getUserByEmail(request.getEmail());
-                    // Si el usuario existe en Auth pero no en Firestore, lo eliminamos y creamos uno nuevo
-                    if (!userService.existsByEmail(request.getEmail())) {
-                        FirebaseAuth.getInstance().deleteUser(userRecord.getUid());
-                        userRecord = FirebaseAuth.getInstance().createUser(createRequest);
-                    } else {
-                        throw new CustomExceptions.EmailAlreadyExistsException("Email already in use");
-                    }
-                } else {
-                    throw e;
-                }
-            }
+            System.out.println("Sending create user request to Firebase");
+            UserRecord userRecord = FirebaseAuth.getInstance().createUser(createRequest);
+            System.out.println("User created successfully in Firebase with UID: " + userRecord.getUid());
 
+            // Usa el UID generado por Firebase
+            request.setUid(userRecord.getUid());
             UserResponse user = userService.createUser(request);
 
             List<String> rolesWithPrefix = user.getRoles().stream()
@@ -80,6 +112,11 @@ public class AuthService {
 
             return new AuthResponse(idToken, user);
         } catch (FirebaseAuthException e) {
+            if (e.getErrorCode().equals("auth/email-already-exists")) {
+                System.err.println("FirebaseAuthException occurred: " + e.getErrorCode() + " - " + e.getMessage());
+
+                throw new CustomExceptions.EmailAlreadyExistsException("The user with the provided email already exists");
+            }
             throw new CustomExceptions.AuthenticationException("Error during user registration: " + e.getMessage());
         }
     }

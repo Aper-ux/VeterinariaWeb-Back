@@ -6,7 +6,9 @@ import com.example.demo.dto.UserDTOs.*;
 import com.example.demo.exception.CustomExceptions;
 import com.example.demo.model.Role;
 import com.example.demo.model.User;
+import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.QuerySnapshot;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.UserRecord;
@@ -40,30 +42,94 @@ public class UserService {
         }
     }
 
+//    public UserResponse createUser(RegisterRequest request) {
+//        try {
+//            UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
+//                    .setEmail(request.getEmail())
+//                    .setPassword(request.getPassword())
+//                    .setDisplayName(request.getNombre() + " " + request.getApellido());
+//
+//            UserRecord userRecord = FirebaseAuth.getInstance().createUser(createRequest);
+//
+//            User user = new User();
+//            user.setUid(userRecord.getUid());
+//            user.setEmail(request.getEmail());
+//            user.setNombre(request.getNombre());
+//            user.setApellido(request.getApellido());
+//            user.setTelefono(request.getTelefono());
+//            user.setDireccion(request.getDireccion());
+//            user.setRoles(request.getRoles());
+//            user.setEnabled(true);
+//            user.setActive(true);
+//
+//            getFirestore().collection("users").document(userRecord.getUid()).set(user).get();
+//            return convertToUserResponse(user);
+//        } catch (FirebaseAuthException | InterruptedException | ExecutionException e) {
+//            throw new CustomExceptions.ProcessingException("Error creating user: " + e.getMessage());
+//        }
+//    }
+//
     public UserResponse createUser(RegisterRequest request) {
         try {
-            UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
-                    .setEmail(request.getEmail())
-                    .setPassword(request.getPassword())
-                    .setDisplayName(request.getNombre() + " " + request.getApellido());
+            // Primero, verifica si el usuario ya existe en Firestore
+            Optional<User> existingUser = findByEmail(request.getEmail());
+            if (existingUser.isPresent()) {
+                // Si el usuario ya existe, actualiza sus datos y devuelve la respuesta
+                User user = existingUser.get();
+                updateUserData(user, request);
+                return convertToUserResponse(user);
+            }
 
-            UserRecord userRecord = FirebaseAuth.getInstance().createUser(createRequest);
+            // Si el usuario no existe, crea uno nuevo
+            User newUser = new User();
+            newUser.setUid(request.getUid()); // Esto debería ser el UID de Firebase
+            newUser.setEmail(request.getEmail());
+            newUser.setNombre(request.getNombre());
+            newUser.setApellido(request.getApellido());
+            newUser.setTelefono(request.getTelefono());
+            newUser.setDireccion(request.getDireccion());
+            newUser.setRoles(request.getRoles());
+            newUser.setEnabled(true);
+            newUser.setActive(true);
 
-            User user = new User();
-            user.setUid(userRecord.getUid());
-            user.setEmail(request.getEmail());
-            user.setNombre(request.getNombre());
-            user.setApellido(request.getApellido());
-            user.setTelefono(request.getTelefono());
-            user.setDireccion(request.getDireccion());
-            user.setRoles(request.getRoles());
-            user.setEnabled(true);
-            user.setActive(true);
+            // Guarda el nuevo usuario en Firestore
+            getFirestore().collection("users").document(newUser.getUid()).set(newUser).get();
 
-            getFirestore().collection("users").document(userRecord.getUid()).set(user).get();
-            return convertToUserResponse(user);
-        } catch (FirebaseAuthException | InterruptedException | ExecutionException e) {
+            return convertToUserResponse(newUser);
+        } catch (InterruptedException | ExecutionException e) {
             throw new CustomExceptions.ProcessingException("Error creating user: " + e.getMessage());
+        }
+    }
+    private void updateUserData(User user, RegisterRequest request) {
+        user.setNombre(request.getNombre());
+        user.setApellido(request.getApellido());
+        user.setTelefono(request.getTelefono());
+        user.setDireccion(request.getDireccion());
+        user.setRoles(request.getRoles());
+        // Actualiza el usuario en Firestore
+        try {
+            getFirestore().collection("users").document(user.getUid()).set(user).get();
+        } catch (InterruptedException e) {
+            System.err.println(e);
+            throw new RuntimeException(e);
+        } catch (ExecutionException e) {
+            System.err.println(e);
+            throw new RuntimeException(e);
+        }
+    }
+    public Optional<User> findByEmail(String email) {
+        try {
+            QuerySnapshot querySnapshot = getFirestore().collection("users")
+                    .whereEqualTo("email", email)
+                    .get()
+                    .get();
+            if (!querySnapshot.isEmpty()) {
+                DocumentSnapshot document = querySnapshot.getDocuments().get(0);
+                return Optional.of(document.toObject(User.class));
+            }
+            return Optional.empty();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new CustomExceptions.ProcessingException("Error finding user by email: " + e.getMessage());
         }
     }
 
@@ -202,6 +268,7 @@ public class UserService {
             throw new CustomExceptions.ProcessingException("Error checking user existence: " + e.getMessage());
         }
     }
+
     private String getCurrentUserUid() {
         // Obtener el contexto de seguridad actual
         SecurityContext securityContext = SecurityContextHolder.getContext();
