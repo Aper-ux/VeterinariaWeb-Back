@@ -27,7 +27,13 @@ public class UserController {
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers(
             @RequestParam(required = false) Boolean isActive,
             @RequestParam(required = false) String role) {
-        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers(isActive, role)));
+        try {
+            List<UserResponse> users = userService.getAllUsers(isActive, role);
+            return ResponseEntity.ok(ApiResponse.success(users));
+        } catch (CustomExceptions.ProcessingException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("PROCESSING_ERROR", e.getMessage()));
+        }
     }
 
     @GetMapping("/{id}")
@@ -38,6 +44,18 @@ public class UserController {
     @PostMapping
     public ResponseEntity<ApiResponse<UserResponse>> createUser(@RequestBody AuthDTOs.RegisterRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.createUser(request)));
+    }
+    @PreAuthorize("hasRole('VETERINARIO')")
+    @PostMapping("/create-with-roles")
+    public ResponseEntity<ApiResponse<UserResponse>> createUserWithRoles(@RequestBody AuthDTOs.RegisterRequest request) {
+        try {
+            // Delegate user creation to UserService
+            UserResponse newUser = userService.createUserWithRoles(request);
+            return ResponseEntity.ok(ApiResponse.success(newUser));
+        } catch (CustomExceptions.ProcessingException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("PROCESSING_ERROR", e.getMessage()));
+        }
     }
 
     @PutMapping("/{id}")

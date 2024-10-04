@@ -25,10 +25,14 @@ public class UserDTOs {
     @Data
     public static class UpdateUserRequest {
 
+        private String email;
         private String nombre;
         private String apellido;
         private String telefono;
         private String direccion;
+        private List<Role> roles;
+        private boolean isEnabled;
+        private boolean active;
     }
 
     @Data

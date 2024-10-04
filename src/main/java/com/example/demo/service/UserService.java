@@ -49,33 +49,6 @@ public class UserService {
         }
     }
 
-//    public UserResponse createUser(RegisterRequest request) {
-//        try {
-//            UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
-//                    .setEmail(request.getEmail())
-//                    .setPassword(request.getPassword())
-//                    .setDisplayName(request.getNombre() + " " + request.getApellido());
-//
-//            UserRecord userRecord = FirebaseAuth.getInstance().createUser(createRequest);
-//
-//            User user = new User();
-//            user.setUid(userRecord.getUid());
-//            user.setEmail(request.getEmail());
-//            user.setNombre(request.getNombre());
-//            user.setApellido(request.getApellido());
-//            user.setTelefono(request.getTelefono());
-//            user.setDireccion(request.getDireccion());
-//            user.setRoles(request.getRoles());
-//            user.setEnabled(true);
-//            user.setActive(true);
-//
-//            getFirestore().collection("users").document(userRecord.getUid()).set(user).get();
-//            return convertToUserResponse(user);
-//        } catch (FirebaseAuthException | InterruptedException | ExecutionException e) {
-//            throw new CustomExceptions.ProcessingException("Error creating user: " + e.getMessage());
-//        }
-//    }
-//
     public UserResponse createUser(RegisterRequest request) {
         try {
             // Primero, verifica si el usuario ya existe en Firestore
@@ -104,6 +77,45 @@ public class UserService {
 
             return convertToUserResponse(newUser);
         } catch (InterruptedException | ExecutionException e) {
+            throw new CustomExceptions.ProcessingException("Error creating user: " + e.getMessage());
+        }
+    }
+    public UserResponse createUserWithRoles(RegisterRequest request) {
+        try {
+            // Create user in Firebase Authentication
+            UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
+                    .setEmail(request.getEmail())
+                    .setPassword(request.getPassword())
+                    .setDisplayName(request.getNombre() + " " + request.getApellido());
+
+            UserRecord userRecord = FirebaseAuth.getInstance().createUser(createRequest);
+
+            // Use the Firebase UID for the Firestore user record
+            User newUser = new User();
+            newUser.setUid(userRecord.getUid());
+            newUser.setEmail(request.getEmail());
+            newUser.setNombre(request.getNombre());
+            newUser.setApellido(request.getApellido());
+            newUser.setTelefono(request.getTelefono());
+            newUser.setDireccion(request.getDireccion());
+            newUser.setRoles(request.getRoles()); // Assign roles from the frontend
+            newUser.setEnabled(true);
+            newUser.setActive(true);
+
+            // Save the user to Firestore
+            getFirestore().collection("users").document(newUser.getUid()).set(newUser).get();
+
+            // Set custom claims for roles in Firebase Authentication
+            Map<String, Object> claims = new HashMap<>();
+            List<String> rolesWithPrefix = request.getRoles().stream()
+                    .map(role -> "ROLE_" + role.name())
+                    .collect(Collectors.toList());
+            claims.put("roles", rolesWithPrefix);
+            FirebaseAuth.getInstance().setCustomUserClaims(userRecord.getUid(), claims);
+
+            return convertToUserResponse(newUser);
+
+        } catch (FirebaseAuthException | InterruptedException | ExecutionException e) {
             throw new CustomExceptions.ProcessingException("Error creating user: " + e.getMessage());
         }
     }
@@ -155,15 +167,26 @@ public class UserService {
     public List<UserResponse> getAllUsers(Boolean isActive, String role) {
         try {
             List<UserResponse> users = new ArrayList<>();
-            getFirestore().collection("users").get().get().getDocuments().forEach(doc -> {
-                User user = doc.toObject(User.class);
-                if ((isActive == null || user.isActive() == isActive) &&
-                        (role == null || user.getRoles().contains(Role.valueOf(role.toUpperCase())))) {
-                    users.add(convertToUserResponse(user));
+            QuerySnapshot querySnapshot = getFirestore().collection("users").get().get();
+
+            for (DocumentSnapshot document : querySnapshot.getDocuments()) {
+                User user = document.toObject(User.class);
+                if (user != null) {
+                    // Asegúrate de que el UID se establezca correctamente
+                    user.setUid(document.getId());
+
+                    // Aplicar filtros si están presentes
+                    if ((isActive == null || user.isActive() == isActive) &&
+                            (role == null || (user.getRoles() != null && user.getRoles().contains(Role.valueOf(role.toUpperCase()))))) {
+                        users.add(convertToUserResponse(user));
+                    }
                 }
-            });
+            }
+
+            logger.info("Retrieved {} users from Firestore", users.size());
             return users;
         } catch (InterruptedException | ExecutionException e) {
+            logger.error("Error fetching users: ", e);
             throw new CustomExceptions.ProcessingException("Error fetching users: " + e.getMessage());
         }
     }
@@ -174,10 +197,12 @@ public class UserService {
             if (user == null) {
                 throw new CustomExceptions.UserNotFoundException("User not found with id: " + id);
             }
+            user.setEmail(request.getEmail());
             user.setNombre(request.getNombre());
             user.setApellido(request.getApellido());
             user.setTelefono(request.getTelefono());
             user.setDireccion(request.getDireccion());
+            user.setRoles(request.getRoles());
 
             getFirestore().collection("users").document(id).set(user).get();
             return convertToUserResponse(user);
@@ -282,7 +307,7 @@ public class UserService {
         response.setApellido(user.getApellido());
         response.setTelefono(user.getTelefono());
         response.setDireccion(user.getDireccion());
-        response.setRoles(user.getRoles());
+        response.setRoles(user.getRoles() != null ? user.getRoles() : new ArrayList<>());
         response.setEnabled(user.isEnabled());
         response.setActive(user.isActive());
         return response;

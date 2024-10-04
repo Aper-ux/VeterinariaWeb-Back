@@ -39,12 +39,13 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> {
                     authorize.requestMatchers("/api/auth/login", "/api/auth/register").permitAll();
-//                    authorize.requestMatchers(HttpMethod.GET, "/api/users").hasAuthority("ROLE_VETERINARIO");
+                    authorize.requestMatchers(HttpMethod.POST, "/api/users/create-with-roles").hasAuthority("ROLE_VETERINARIO");
+                    authorize.requestMatchers(HttpMethod.GET, "/api/users").hasAuthority("ROLE_VETERINARIO");
                     authorize.requestMatchers(HttpMethod.POST, "/api/users").hasAuthority("ROLE_VETERINARIO");
                     authorize.requestMatchers(HttpMethod.DELETE, "/api/users/**").hasAuthority("ROLE_VETERINARIO");
                     authorize.requestMatchers("/api/roles").hasAuthority("ROLE_VETERINARIO");
                     authorize.requestMatchers("/api/users/*/toggle-status").hasAuthority("ROLE_VETERINARIO");
-//                    authorize.requestMatchers(HttpMethod.GET, "/api/users/*").hasAnyAuthority("ROLE_VETERINARIO", "ROLE_RECEPCIONISTA");
+                   authorize.requestMatchers(HttpMethod.GET, "/api/users/*").hasAnyAuthority("ROLE_VETERINARIO", "ROLE_RECEPCIONISTA");
                     authorize.requestMatchers("/api/users/*/notes").hasAnyAuthority("ROLE_VETERINARIO", "ROLE_RECEPCIONISTA");
                     authorize.requestMatchers(HttpMethod.PUT, "/api/users/me").authenticated();
                     authorize.requestMatchers("/api/users/me/change-password").authenticated();
