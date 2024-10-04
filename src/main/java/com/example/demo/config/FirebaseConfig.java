@@ -23,33 +23,29 @@ public class FirebaseConfig {
     @Value("${firebase.config.path}")
     private String configPath;
 
-    // Bean para inicializar FirebaseApp
     @Bean
     public FirebaseApp firebaseApp() throws IOException {
-        // Cargar el archivo JSON de configuración de Firebase
-        InputStream serviceAccount = new ClassPathResource(configPath).getInputStream();
-
-        FirebaseOptions options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                .setDatabaseUrl(databaseUrl)
-                .build();
-
-        // Verificar si FirebaseApp ya fue inicializado, y si no, inicializarlo
         if (FirebaseApp.getApps().isEmpty()) {
+            InputStream serviceAccount = new ClassPathResource(configPath).getInputStream();
+
+            FirebaseOptions options = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                    .setDatabaseUrl(databaseUrl)
+                    .build();
+
             return FirebaseApp.initializeApp(options);
         } else {
-            return FirebaseApp.getInstance();
+            return FirebaseApp.getInstance();  // Return the existing FirebaseApp instance
         }
     }
 
-    // Bean para Firestore
     @Bean
     public Firestore firestore() throws IOException {
         return FirestoreClient.getFirestore(firebaseApp());
     }
-    // Bean para FirebaseAuth
+
     @Bean
     public FirebaseAuth firebaseAuth() throws IOException {
-        return FirebaseAuth.getInstance(firebaseApp()); // Asegura que FirebaseApp esté inicializado antes
+        return FirebaseAuth.getInstance(firebaseApp());
     }
 }

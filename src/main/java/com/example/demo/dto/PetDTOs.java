@@ -1,6 +1,8 @@
 package com.example.demo.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.Date;
 
@@ -17,10 +19,14 @@ public class PetDTOs {
     @Data
     public static class UpdatePetRequest {
         private String name;
+        private String species;
+        private String breed;
         private int age;
     }
 
     @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
     public static class PetResponse {
         private String id;
         private String name;

@@ -2,8 +2,10 @@ package com.example.demo.controller;
 
 import com.example.demo.dto.ApiResponse;
 import com.example.demo.dto.PetDTOs.*;
+import com.example.demo.exception.CustomExceptions;
 import com.example.demo.service.PetService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +18,11 @@ public class PetController {
 
     @Autowired
     private PetService petService;
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<PetResponse>>> getCurrentUserPets() {
+        return ResponseEntity.ok(ApiResponse.success(petService.getCurrentUserPets()));
+    }
 
     @PostMapping
     @PreAuthorize("isAuthenticated()")
@@ -45,5 +52,27 @@ public class PetController {
     @PreAuthorize("hasRole('VETERINARIO')")
     public ResponseEntity<ApiResponse<MedicalRecordResponse>> addMedicalRecord(@PathVariable String id, @RequestBody AddMedicalRecordRequest request) {
         return ResponseEntity.ok(ApiResponse.success(petService.addMedicalRecord(id, request)));
+    }
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('VETERINARIO') or @petService.isOwner(#id)")
+    public ResponseEntity<ApiResponse<Void>> deletePet(@PathVariable String id) {
+        try {
+            petService.deletePet(id);
+            return ResponseEntity.ok(ApiResponse.success(null));
+        } catch (CustomExceptions.NotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("PET_NOT_FOUND", e.getMessage()));
+        } catch (CustomExceptions.UnauthorizedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("UNAUTHORIZED", e.getMessage()));
+        } catch (CustomExceptions.ProcessingException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("PROCESSING_ERROR", e.getMessage()));
+        }
+    }
+    @GetMapping
+    @PreAuthorize("hasRole('VETERINARIO')")
+    public ResponseEntity<ApiResponse<List<PetResponse>>> getAllPets() {
+        return ResponseEntity.ok(ApiResponse.success(petService.getAllPets()));
     }
 }

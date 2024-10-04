@@ -42,6 +42,11 @@ public class CustomExceptions {
             super(message);
         }
     }
+    public static class InvalidPasswordException extends InvalidCredentialsException{
+        public InvalidPasswordException(String message){
+            super(message);
+        }
+    }
 
 
 }

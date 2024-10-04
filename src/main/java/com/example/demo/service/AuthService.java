@@ -151,7 +151,7 @@ public class AuthService {
 
             return new AuthResponse(idToken, user);
         } catch (FirebaseAuthException e) {
-            throw new CustomExceptions.AuthenticationException("Error during user login: " + e.getMessage());
+            throw new CustomExceptions.AuthenticationException("Invalid email or password.");
         } catch (CustomExceptions.InvalidCredentialsException e) {
             throw new CustomExceptions.InvalidCredentialsException(e.getMessage());
         } catch (Exception e) {
