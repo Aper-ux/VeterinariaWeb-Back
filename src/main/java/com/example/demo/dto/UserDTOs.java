@@ -1,10 +1,13 @@
 package com.example.demo.dto;
 
 import com.example.demo.model.Role;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import lombok.NoArgsConstructor;
+
 import java.util.List;
 
 public class UserDTOs {
@@ -57,6 +60,8 @@ public class UserDTOs {
     }
 
     @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class RolePermissionDTO {
         private String role;
         private List<String> permissions;

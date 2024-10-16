@@ -18,7 +18,7 @@ public class InventoryController {
     private InventoryService inventoryService;
 
     @GetMapping
-    @PreAuthorize("hasRole('VETERINARIO') or hasRole('RECEPCIONISTA')")
+    @PreAuthorize("hasPermission('', 'VER_USUARIOS')")
     public ResponseEntity<ApiResponse<List<InventoryItemResponse>>> getAllItems() {
         return ResponseEntity.ok(ApiResponse.success(inventoryService.getAllItems()));
     }

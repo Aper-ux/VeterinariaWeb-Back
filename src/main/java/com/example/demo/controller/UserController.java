@@ -23,6 +23,7 @@ public class UserController {
     @Autowired
     private UserService userService;
 
+    @PreAuthorize("hasPermission(null, 'VER_USUARIOS')")
     @GetMapping
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers(
             @RequestParam(required = false) Boolean isActive,
@@ -36,17 +37,33 @@ public class UserController {
         }
     }
 
+ /*
+    @PreAuthorize("hasPermission(null, 'VER_USUARIOS')")
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers(
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) String role) {
+        List<UserResponse> users = userService.getAllUsers(isActive, role);
+        return ResponseEntity.ok(ApiResponse.success(users));
+    }
+
+
+  */
+
     @GetMapping("/{id}")
+    @PreAuthorize("hasPermission('', 'VER_USUARIOS')")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
     }
 
     @PostMapping
+    //@PreAuthorize("hasPermission('', 'CREAR_USUARIO')")
     public ResponseEntity<ApiResponse<UserResponse>> createUser(@RequestBody AuthDTOs.RegisterRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.createUser(request)));
     }
-    @PreAuthorize("hasRole('VETERINARIO')")
+
     @PostMapping("/create-with-roles")
+    @PreAuthorize("hasPermission('', 'CREAR_USUARIO')")
     public ResponseEntity<ApiResponse<UserResponse>> createUserWithRoles(@RequestBody AuthDTOs.RegisterRequest request) {
         try {
             // Delegate user creation to UserService
@@ -59,17 +76,20 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasPermission('', 'EDITAR_USUARIO')")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(@PathVariable String id, @RequestBody UpdateUserRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.updateUser(id, request)));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasPermission('', 'ELIMINAR_USUARIO')")
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PostMapping("/me/change-password")
+    @PreAuthorize("hasPermission('', 'VER_PERFIL_PROPIO')")
     public ResponseEntity<ApiResponse<Void>> changePassword(@RequestBody ChangePasswordRequest request) {
         String userId = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
@@ -88,32 +108,36 @@ public class UserController {
     }
 
     @PostMapping("/{id}/toggle-status")
+    @PreAuthorize("hasPermission('', 'EDITAR_USUARIO')")
     public ResponseEntity<ApiResponse<UserResponse>> toggleUserStatus(@PathVariable String id, @RequestBody ToggleUserStatusRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.toggleUserStatus(id, request)));
     }
 
     @PostMapping("/{id}/notes")
+    @PreAuthorize("hasPermission('', 'EDITAR_USUARIO')")
     public ResponseEntity<ApiResponse<Void>> addNote(@PathVariable String id, @RequestBody AddNoteRequest request) {
         userService.addNote(id, request);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @GetMapping("/{id}/notes")
+    @PreAuthorize("hasPermission('', 'VER_USUARIOS')")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getUserNotes(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserNotes(id)));
     }
     @GetMapping("/me")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasPermission('', 'VER_PERFIL_PROPIO')")
     public ResponseEntity<ApiResponse<UserResponse>> getCurrentUserProfile() {
         return ResponseEntity.ok(ApiResponse.success(userService.getCurrentUserProfile()));
     }
 
     @PutMapping("/me")
+    @PreAuthorize("hasPermission('', 'EDITAR_PERFIL_PROPIO')")
     public ResponseEntity<ApiResponse<UserResponse>> updateCurrentUserProfile(@RequestBody UpdateProfileRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.updateCurrentUserProfile(request)));
     }
     @GetMapping("/me/pets")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasPermission('', 'VER_PERFIL_PROPIO')")
     public ResponseEntity<ApiResponse<List<PetDTOs.PetResponse>>> getCurrentUserPets() {
         return ResponseEntity.ok(ApiResponse.success(userService.getCurrentUserPets()));
     }

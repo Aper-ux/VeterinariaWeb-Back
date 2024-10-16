@@ -1,6 +1,7 @@
 package com.example.demo.security;
 
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -21,48 +22,86 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        if (request.getRequestURI().contains("/api/auth/login") ||
-                request.getRequestURI().contains("/api/auth/register")) {
+        try {
+            if (isPublicEndpoint(request)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            String idToken = extractToken(request);
+            if (idToken == null) {
+                handleAuthenticationFailure(response, "No token provided");
+                return;
+            }
+
+            FirebaseToken decodedToken = verifyToken(idToken);
+            if (decodedToken == null) {
+                handleAuthenticationFailure(response, "Invalid token");
+                return;
+            }
+
+            List<SimpleGrantedAuthority> authorities = extractAuthorities(decodedToken);
+            setAuthenticationInContext(decodedToken, authorities);
+
             filterChain.doFilter(request, response);
-            return;
+        } catch (Exception e) {
+            logger.error("Authentication error", e);
+            handleAuthenticationFailure(response, "Authentication failed");
         }
+    }
+
+    private boolean isPublicEndpoint(HttpServletRequest request) {
+        return request.getRequestURI().contains("/api/auth/login") ||
+                request.getRequestURI().contains("/api/auth/register");
+    }
+
+    private String extractToken(HttpServletRequest request) {
         String authorizationHeader = request.getHeader("Authorization");
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
-            String idToken = authorizationHeader.substring(7);
-            try {
-                FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(idToken);
-                List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-
-                Object rolesObject = decodedToken.getClaims().get("roles");
-                if (rolesObject instanceof List) {
-                    List<?> roles = (List<?>) rolesObject;
-                    for (Object role : roles) {
-                        if (role instanceof String) {
-                            authorities.add(new SimpleGrantedAuthority((String) role));
-                        }
-                    }
-                }
-
-                if (authorities.isEmpty()) {
-                    authorities.add(new SimpleGrantedAuthority("ROLE_CLENTE"));
-                }
-
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        decodedToken.getUid(), null, authorities);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-
-                System.out.println("Roles asignados al SecurityContext: " + authorities);
-            } catch (Exception e) {
-                SecurityContextHolder.clearContext();
-                System.out.println("Error en la autenticación: " + e.getMessage());
-                e.printStackTrace();
-            }
-        } else {
-            // Si no hay token y no es una ruta pública, rechazar la solicitud
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return;
+            return authorizationHeader.substring(7);
         }
-        filterChain.doFilter(request, response);
+        return null;
+    }
+
+    private FirebaseToken verifyToken(String idToken) {
+        try {
+            return FirebaseAuth.getInstance().verifyIdToken(idToken);
+        } catch (FirebaseAuthException e) {
+            logger.error("Error verifying Firebase token", e);
+            return null;
+        }
+    }
+
+    private List<SimpleGrantedAuthority> extractAuthorities(FirebaseToken decodedToken) {
+        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+        Object rolesObject = decodedToken.getClaims().get("roles");
+        if (rolesObject instanceof List) {
+            List<?> roles = (List<?>) rolesObject;
+            for (Object role : roles) {
+                if (role instanceof String) {
+                    authorities.add(new SimpleGrantedAuthority("ROLE_" + ((String) role).toUpperCase()));
+                }
+            }
+        }
+        if (authorities.isEmpty()) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_CLIENTE"));
+        }
+        return authorities;
+    }
+
+    private void setAuthenticationInContext(FirebaseToken decodedToken, List<SimpleGrantedAuthority> authorities) {
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                decodedToken.getUid(), null, authorities);
+       // logger.info((Object) "Roles assigned to SecurityContext: {}. User ID: {}", (Throwable) authorities);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+    }
+
+    private void handleAuthenticationFailure(HttpServletResponse response, String message) throws IOException {
+        SecurityContextHolder.clearContext();
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        response.getWriter().write("{\"error\":\"" + message + "\"}");
     }
 
 }

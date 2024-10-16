@@ -12,6 +12,7 @@ import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.google.firebase.cloud.FirestoreClient;
 import lombok.Data;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -23,6 +24,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class RolePermissionService {
+    @Autowired
+    private Firestore firestore;
     private Firestore getFirestore() {
         return FirestoreClient.getFirestore();
     }
@@ -64,26 +67,22 @@ public class RolePermissionService {
             throw new CustomExceptions.ProcessingException("Error checking user permission: " + e.getMessage());
         }
     }
-    public UserDTOs.RolePermissionDTO updateRolePermissions(String roleName, List<String> permissions) {
+    public UserDTOs.RolePermissionDTO updateRolePermissions(String roleName, List<String> newPermissions) {
         try {
-            ApiFuture<QuerySnapshot> future = getFirestore().collection("roles").whereEqualTo("name", roleName).get();
-            List<QueryDocumentSnapshot> documents = future.get().getDocuments();
+            List<QueryDocumentSnapshot> documents = firestore.collection("roles")
+                    .whereEqualTo("name", roleName)
+                    .get().get().getDocuments();
             if (!documents.isEmpty()) {
                 String docId = documents.get(0).getId();
-                getFirestore().collection("roles").document(docId).update("permissions", permissions).get();
-
-                UserDTOs.RolePermissionDTO dto = new UserDTOs.RolePermissionDTO();
-                dto.setRole(roleName);
-                dto.setPermissions(permissions);
-                return dto;
+                firestore.collection("roles").document(docId).update("permissions", newPermissions).get();
+                return new UserDTOs.RolePermissionDTO(roleName, newPermissions);
             } else {
-                throw new CustomExceptions.ProcessingException("Role not found: " + roleName);
+                throw new RuntimeException("Role not found");
             }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new CustomExceptions.ProcessingException("Error updating role permissions: " + e.getMessage());
+        } catch (Exception e) {
+            throw new RuntimeException("Error updating role permissions", e);
         }
     }
-
     public List<UserDTOs.RolePermissionDTO> getAllRolePermissions() {
         try {
             List<UserDTOs.RolePermissionDTO> rolePermissions = new ArrayList<>();
@@ -120,12 +119,7 @@ public class RolePermissionService {
         }
         return new ArrayList<>();
     }
-    /*
-    private List<String> getRolePermissions(String role) throws ExecutionException, InterruptedException {
-        return (List<String>) getFirestore().collection("role_permissions").document(role).get().get().get("permissions");
-    }
 
-     */
     private List<String> getRolePermissions(String roleName) throws ExecutionException, InterruptedException {
         ApiFuture<QuerySnapshot> future = getFirestore().collection("roles").whereEqualTo("name", roleName).get();
         List<QueryDocumentSnapshot> documents = future.get().getDocuments();
@@ -135,5 +129,20 @@ public class RolePermissionService {
             return permissions != null ? permissions : new ArrayList<>();
         }
         return new ArrayList<>();
+    }
+    // Obtener permisos de un rol por nombre
+    public List<String> getRolePermissionsByName(String roleName) {
+        try {
+            List<QueryDocumentSnapshot> documents = firestore.collection("roles")
+                    .whereEqualTo("name", roleName)
+                    .get().get().getDocuments();
+            if (!documents.isEmpty()) {
+                return (List<String>) documents.get(0).get("permissions");
+            } else {
+                throw new RuntimeException("Role not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Error fetching role permissions", e);
+        }
     }
 }
