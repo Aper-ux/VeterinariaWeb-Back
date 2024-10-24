@@ -40,19 +40,6 @@ public class RolePermissionService {
     }
 
 
-
-    // Verificar si el usuario tiene un permiso específico
-//    public boolean hasPermission(Object principal, String permission) {
-//        // Obtener el usuario autenticado y sus roles
-//        CustomUserDetails userDetails = (CustomUserDetails) principal;
-//        for (Role role : userDetails.getRoles()) {
-//            List<String> permissions = rolePermissions.get(role);
-//            if (permissions != null && permissions.contains(permission)) {
-//                return true;
-//            }
-//        }
-//        return false;
-//    }
     public boolean hasPermission(String uid, String permission) {
         try {
             List<Role> userRoles = getUserRoles(uid);

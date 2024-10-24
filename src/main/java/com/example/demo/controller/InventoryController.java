@@ -24,20 +24,16 @@ public class InventoryController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('VETERINARIO')")
+    @PreAuthorize("hasPermission('', 'AÑADIR_ITEM')")
     public ResponseEntity<ApiResponse<InventoryItemResponse>> addItem(@RequestBody AddInventoryItemRequest request) {
         return ResponseEntity.ok(ApiResponse.success(inventoryService.addItem(request)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('VETERINARIO')")
+    @PreAuthorize("hasPermission('', 'ACTUALIZAR_ITEM')")
     public ResponseEntity<ApiResponse<InventoryItemResponse>> updateItem(@PathVariable String id, @RequestBody UpdateInventoryItemRequest request) {
         return ResponseEntity.ok(ApiResponse.success(inventoryService.updateItem(id, request)));
     }
 
-    @GetMapping("/low-stock")
-    @PreAuthorize("hasRole('VETERINARIO') or hasRole('RECEPCIONISTA')")
-    public ResponseEntity<ApiResponse<List<InventoryItemResponse>>> getLowStockItems() {
-        return ResponseEntity.ok(ApiResponse.success(inventoryService.getLowStockItems()));
-    }
+
 }

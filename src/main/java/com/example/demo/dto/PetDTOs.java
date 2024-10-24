@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
+import java.util.List;
 
 public class PetDTOs {
 
@@ -40,6 +41,7 @@ public class PetDTOs {
     public static class AddMedicalRecordRequest {
         private String diagnosis;
         private String treatment;
+        private String notes;
     }
 
     @Data
@@ -48,6 +50,19 @@ public class PetDTOs {
         private Date date;
         private String diagnosis;
         private String treatment;
+        private String notes;
         private String veterinarianId;
+        private String veterinarianName;
+    }
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class PetWithHistoryDTO {
+        private String id;
+        private String name;
+        private String species;
+        private String breed;
+        private int age;
+        private List<MedicalRecordResponse> medicalHistory;
     }
 }

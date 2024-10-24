@@ -10,5 +10,7 @@ public class InventoryItem {
     private String name;
     private int quantity;
     private int minThreshold;
+    private int recommendedOrderQuantity;
     private Date dateAdded;
+    private Date lastUpdated;
 }

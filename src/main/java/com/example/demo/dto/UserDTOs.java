@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public class UserDTOs {
@@ -74,6 +75,24 @@ public class UserDTOs {
         private String telefono;
         private String direccion;
     }
+    @Data
+    @AllArgsConstructor
+    public static class ClientSearchCriteria {
+        private String clientName;
+        private String petName;
+        private LocalDate consultationDate;
+    }
+    @Data
+    public static class ClientWithPetsDTO {
+        private String uid;
+        private String nombre;
+        private String apellido;
+        private String email;
+        private String telefono;
+        private String direccion;
+        private List<PetDTOs.PetWithHistoryDTO> mascotas;
+    }
+
 
 
 }
