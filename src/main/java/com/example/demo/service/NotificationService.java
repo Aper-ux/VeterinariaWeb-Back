@@ -1,6 +1,8 @@
 package com.example.demo.service;
 
 
+import com.example.demo.dto.PetDTOs;
+import com.example.demo.dto.UserDTOs;
 import com.example.demo.model.AlertStatus;
 import com.example.demo.model.LowStockAlert;
 import com.example.demo.model.Role;
@@ -16,7 +18,9 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
@@ -34,6 +38,12 @@ public class NotificationService {
 
     @Autowired
     private Firestore firestore;
+
+    @Autowired
+    private PetService petService;
+
+    @Autowired
+    private UserService userService;
 
     public void sendLowStockAlert(LowStockAlert alert) {
         try {
@@ -61,7 +71,7 @@ public class NotificationService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(content, true);
-
+            log.info("Enviando correo...");
             emailSender.send(message);
             log.info("Alert email sent to: {}", to);
         } catch (Exception e) {
@@ -114,5 +124,177 @@ public class NotificationService {
             log.error("Error obteniendo emails para el rol {}: {}", role, e.getMessage());
             return new ArrayList<>(); // Retornar lista vacía en caso de error
         }
+    }
+    //PARTE DE CITAS
+    public void sendAppointmentRescheduledNotification(String clientId, String petId, Date oldDate, Date newDate) {
+        try {
+            PetDTOs.PetResponse pet = petService.getPetById(petId);
+            UserDTOs.UserResponse client = userService.getUserById(clientId);
+
+            String subject = "Cita reprogramada para " + pet.getName();
+            String content = generateRescheduledAppointmentEmail(pet.getName(), oldDate, newDate);
+
+            sendEmail(client.getEmail(), subject, content);
+        } catch (Exception e) {
+            log.error("Error sending appointment rescheduled notification: {}", e.getMessage());
+        }
+    }
+
+    public void sendVeterinarianAppointmentRescheduledNotification(String veterinarianId, String petId, Date oldDate, Date newDate) {
+        try {
+            PetDTOs.PetResponse pet = petService.getPetById(petId);
+            UserDTOs.UserResponse vet = userService.getUserById(veterinarianId);
+
+            String subject = "Cita reprogramada - " + pet.getName();
+            String content = generateVetRescheduledAppointmentEmail(pet.getName(), oldDate, newDate);
+
+            sendEmail(vet.getEmail(), subject, content);
+        } catch (Exception e) {
+            log.error("Error sending vet appointment rescheduled notification: {}", e.getMessage());
+        }
+    }
+
+    public void sendAppointmentCancelledNotification(String clientId, String petId, Date date) {
+        try {
+            PetDTOs.PetResponse pet = petService.getPetById(petId);
+            UserDTOs.UserResponse client = userService.getUserById(clientId);
+
+            String subject = "Cita cancelada - " + pet.getName();
+            String content = generateCancelledAppointmentEmail(pet.getName(), date);
+
+            sendEmail(client.getEmail(), subject, content);
+        } catch (Exception e) {
+            log.error("Error sending appointment cancelled notification: {}", e.getMessage());
+        }
+    }
+
+    public void sendVeterinarianAppointmentCancelledNotification(String veterinarianId, String petId, Date date) {
+        try {
+            PetDTOs.PetResponse pet = petService.getPetById(petId);
+            UserDTOs.UserResponse vet = userService.getUserById(veterinarianId);
+
+            String subject = "Cita cancelada - " + pet.getName();
+            String content = generateVetCancelledAppointmentEmail(pet.getName(), date);
+
+            sendEmail(vet.getEmail(), subject, content);
+        } catch (Exception e) {
+            log.error("Error sending vet appointment cancelled notification: {}", e.getMessage());
+        }
+    }
+
+    private String generateRescheduledAppointmentEmail(String petName, Date oldDate, Date newDate) {
+        return String.format("""
+            <html>
+            <body>
+                <h2>Cita Reprogramada</h2>
+                <p>La cita para %s ha sido reprogramada:</p>
+                <ul>
+                    <li><strong>Fecha anterior:</strong> %s</li>
+                    <li><strong>Nueva fecha:</strong> %s</li>
+                </ul>
+                <p>Si necesita hacer algún cambio adicional, por favor contáctenos.</p>
+            </body>
+            </html>
+            """,
+                petName,
+                formatDate(oldDate),
+                formatDate(newDate)
+        );
+    }
+
+    private String generateVetRescheduledAppointmentEmail(String petName, Date oldDate, Date newDate) {
+        return String.format("""
+            <html>
+            <body>
+                <h2>Cita Reprogramada - Actualización</h2>
+                <p>Una cita ha sido reprogramada:</p>
+                <ul>
+                    <li><strong>Paciente:</strong> %s</li>
+                    <li><strong>Fecha anterior:</strong> %s</li>
+                    <li><strong>Nueva fecha:</strong> %s</li>
+                </ul>
+            </body>
+            </html>
+            """,
+                petName,
+                formatDate(oldDate),
+                formatDate(newDate)
+        );
+    }
+
+    private String generateCancelledAppointmentEmail(String petName, Date date) {
+        return String.format("""
+            <html>
+            <body>
+                <h2>Cita Cancelada</h2>
+                <p>La cita para %s programada para el %s ha sido cancelada.</p>
+                <p>Si desea programar una nueva cita, por favor contáctenos.</p>
+            </body>
+            </html>
+            """,
+                petName,
+                formatDate(date)
+        );
+    }
+
+    private String generateVetCancelledAppointmentEmail(String petName, Date date) {
+        return String.format("""
+            <html>
+            <body>
+                <h2>Cita Cancelada - Notificación</h2>
+                <p>La siguiente cita ha sido cancelada:</p>
+                <ul>
+                    <li><strong>Paciente:</strong> %s</li>
+                    <li><strong>Fecha:</strong> %s</li>
+                </ul>
+            </body>
+            </html>
+            """,
+                petName,
+                formatDate(date)
+        );
+    }
+    private String formatDate(Date date) {
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+        return sdf.format(date);
+    }
+    String generateNewAppointmentEmail(String petName, Date appointmentDate, String vetName) {
+        return String.format("""
+        <html>
+        <body>
+            <h2>Nueva Cita Programada</h2>
+            <p>Se ha programado una nueva cita para %s:</p>
+            <ul>
+                <li><strong>Fecha:</strong> %s</li>
+                <li><strong>Veterinario:</strong> Dr. %s</li>
+            </ul>
+            <p>Por favor, llegue 10 minutos antes de la hora programada.</p>
+        </body>
+        </html>
+        """,
+                petName,
+                formatDate(appointmentDate),
+                vetName
+        );
+    }
+
+    String generateNewAppointmentVetEmail(String petName, Date appointmentDate, String clientName) {
+        return String.format("""
+        <html>
+        <body>
+            <h2>Nueva Cita Programada</h2>
+            <p>Se ha programado una nueva cita:</p>
+            <ul>
+                <li><strong>Paciente:</strong> %s</li>
+                <li><strong>Dueño:</strong> %s</li>
+                <li><strong>Fecha:</strong> %s</li>
+            </ul>
+        </body>
+        </html>
+        """,
+                petName,
+                clientName,
+                formatDate(appointmentDate)
+        );
     }
 }

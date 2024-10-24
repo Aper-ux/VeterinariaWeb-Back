@@ -24,13 +24,13 @@ public class InventoryController {
     }
 
     @PostMapping
-    @PreAuthorize("hasPermission('', 'AÑADIR_ITEM')")
+    @PreAuthorize("hasPermission('', 'GESTIONAR_INVENTARIO')")
     public ResponseEntity<ApiResponse<InventoryItemResponse>> addItem(@RequestBody AddInventoryItemRequest request) {
         return ResponseEntity.ok(ApiResponse.success(inventoryService.addItem(request)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasPermission('', 'ACTUALIZAR_ITEM')")
+    @PreAuthorize("hasPermission('', 'GESTIONAR_INVENTARIO')")
     public ResponseEntity<ApiResponse<InventoryItemResponse>> updateItem(@PathVariable String id, @RequestBody UpdateInventoryItemRequest request) {
         return ResponseEntity.ok(ApiResponse.success(inventoryService.updateItem(id, request)));
     }

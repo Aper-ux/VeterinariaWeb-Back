@@ -19,42 +19,42 @@ public class PetController {
     @Autowired
     private PetService petService;
     @GetMapping("/me")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasPermission('', 'VER_MIS_MASCOTAS')")
     public ResponseEntity<ApiResponse<List<PetResponse>>> getCurrentUserPets() {
         return ResponseEntity.ok(ApiResponse.success(petService.getCurrentUserPets()));
     }
 
     @PostMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasPermission('', 'AGREGAR_MASCOTA')")
     public ResponseEntity<ApiResponse<PetResponse>> createPet(@RequestBody CreatePetRequest request) {
         return ResponseEntity.ok(ApiResponse.success(petService.createPet(request)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('VETERINARIO') or @petService.isOwner(#id)")
+    @PreAuthorize("hasPermission('', 'EDITAR_MASCOTA') or @petService.isOwner(#id)")
     public ResponseEntity<ApiResponse<PetResponse>> updatePet(@PathVariable String id, @RequestBody UpdatePetRequest request) {
         return ResponseEntity.ok(ApiResponse.success(petService.updatePet(id, request)));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('VETERINARIO') or hasRole('RECEPCIONISTA') or @petService.isOwner(#id)")
+    @PreAuthorize("hasPermission('', 'VER_MASCOTA_XID') or @petService.isOwner(#id)")
     public ResponseEntity<ApiResponse<PetResponse>> getPetById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(petService.getPetById(id)));
     }
 
     @GetMapping("/{id}/medical-history")
-    @PreAuthorize("hasRole('VETERINARIO') or @petService.isOwner(#id)")
+    @PreAuthorize("hasPermission('', 'VER_HISTORIAL_MEDICO') or @petService.isOwner(#id)")
     public ResponseEntity<ApiResponse<List<MedicalRecordResponse>>> getPetMedicalHistory(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(petService.getPetMedicalHistory(id)));
     }
 
     @PostMapping("/{id}/medical-record")
-    @PreAuthorize("hasRole('VETERINARIO')")
+    @PreAuthorize("hasPermission('', 'AGREGAR_HISTORIAL_MEDICO')")
     public ResponseEntity<ApiResponse<MedicalRecordResponse>> addMedicalRecord(@PathVariable String id, @RequestBody AddMedicalRecordRequest request) {
         return ResponseEntity.ok(ApiResponse.success(petService.addMedicalRecord(id, request)));
     }
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('VETERINARIO') or @petService.isOwner(#id)")
+    @PreAuthorize("hasPermission('', 'ELIMINAR_MASCOTA') or @petService.isOwner(#id)")
     public ResponseEntity<ApiResponse<Void>> deletePet(@PathVariable String id) {
         try {
             petService.deletePet(id);
@@ -71,7 +71,7 @@ public class PetController {
         }
     }
     @GetMapping
-    @PreAuthorize("hasRole('VETERINARIO')")
+    @PreAuthorize("hasPermission('', 'VER_TODAS_LAS_MASCOTAS')")
     public ResponseEntity<ApiResponse<List<PetResponse>>> getAllPets() {
         return ResponseEntity.ok(ApiResponse.success(petService.getAllPets()));
     }
