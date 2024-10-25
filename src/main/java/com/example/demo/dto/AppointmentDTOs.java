@@ -64,4 +64,5 @@ public class AppointmentDTOs {
         private Date newDate;
         private String reason;
     }
+
 }
