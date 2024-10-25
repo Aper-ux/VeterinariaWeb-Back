@@ -1,8 +1,6 @@
 package com.example.demo.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.Date;
 import java.util.List;
@@ -45,6 +43,8 @@ public class PetDTOs {
     }
 
     @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
     public static class MedicalRecordResponse {
         private String id;
         private Date date;
@@ -53,7 +53,17 @@ public class PetDTOs {
         private String notes;
         private String veterinarianId;
         private String veterinarianName;
+        // Getters y Setters para petName
+        private String petName;
+        private String petId;
+        private String species;
+        private String breed;
+        private int age;
+        private String ownerId;
+
+
     }
+
     @Data
     @AllArgsConstructor
     @NoArgsConstructor

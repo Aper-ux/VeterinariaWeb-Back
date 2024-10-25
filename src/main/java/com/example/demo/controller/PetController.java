@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.ApiResponse;
+import com.example.demo.dto.MedicalRecordWithDetailsResponse;
 import com.example.demo.dto.PetDTOs.*;
 import com.example.demo.exception.CustomExceptions;
 import com.example.demo.service.PetService;
@@ -53,6 +54,16 @@ public class PetController {
     public ResponseEntity<ApiResponse<MedicalRecordResponse>> addMedicalRecord(@PathVariable String id, @RequestBody AddMedicalRecordRequest request) {
         return ResponseEntity.ok(ApiResponse.success(petService.addMedicalRecord(id, request)));
     }
+
+    @GetMapping("/{id}/medical-history/details")
+    @PreAuthorize("hasPermission('', 'VER_HISTORIAL_MEDICO')")
+    public List<MedicalRecordWithDetailsResponse> getPetMedicalHistoryWithDetails(@PathVariable String id) {
+        return petService.getPetMedicalHistoryWithDetails(id);
+    }
+
+
+
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasPermission('', 'ELIMINAR_MASCOTA') or @petService.isOwner(#id)")
     public ResponseEntity<ApiResponse<Void>> deletePet(@PathVariable String id) {

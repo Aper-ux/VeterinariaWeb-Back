@@ -1,12 +1,16 @@
 package com.example.demo.service;
 
+import com.example.demo.dto.MedicalRecordWithDetailsResponse;
 import com.example.demo.dto.PetDTOs.*;
 import com.example.demo.exception.CustomExceptions;
+import com.example.demo.model.MedicalRecord;
 import com.example.demo.model.Pet;
+import com.example.demo.model.User;
 import com.example.demo.repository.PetRepository;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.firebase.cloud.FirestoreClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -115,6 +119,78 @@ public class PetService {
             throw new CustomExceptions.ProcessingException("Error fetching pet's medical history: " + e.getMessage());
         }
     }
+
+    public List<MedicalRecordWithDetailsResponse> getPetMedicalHistoryWithDetails(String petId) {
+        try {
+            System.out.println("Iniciando la búsqueda de historial médico para la mascota con ID: " + petId);
+
+            List<MedicalRecordWithDetailsResponse> responseList = new ArrayList<>();
+
+            // Verificar si el petId es válido antes de continuar
+            if (petId == null || petId.isEmpty()) {
+                throw new IllegalArgumentException("El 'petId' no puede ser nulo o vacío.");
+            }
+
+            // Obtener directamente los registros médicos de la colección 'medicalHistory' filtrando por 'petId'
+            List<QueryDocumentSnapshot> medicalRecords = getFirestore()
+                    .collection("medicalHistory")
+                    .whereEqualTo("petId", petId) // Filtrar por el ID de la mascota
+                    .get()
+                    .get()
+                    .getDocuments();
+
+            System.out.println("Registros médicos encontrados: " + medicalRecords.size());
+
+            for (DocumentSnapshot recordSnapshot : medicalRecords) {
+                MedicalRecordResponse record = recordSnapshot.toObject(MedicalRecordResponse.class);
+
+                if (record == null) {
+                    System.out.println("Advertencia: El registro médico es nulo.");
+                    continue;
+                }
+
+                MedicalRecordWithDetailsResponse response = new MedicalRecordWithDetailsResponse();
+
+                // Set data from the medical record
+                response.setDiagnosis(record.getDiagnosis());
+                response.setTreatment(record.getTreatment());
+                response.setDate(record.getDate());
+
+                System.out.println("Tratamiento: " + record.getTreatment() + ", Diagnóstico: " + record.getDiagnosis());
+
+                // Obtener el nombre del veterinario desde la colección de usuarios
+                DocumentSnapshot vetSnapshot = getFirestore()
+                        .collection("users")
+                        .document(record.getVeterinarianId())
+                        .get()
+                        .get();
+
+                if (vetSnapshot.exists()) {
+                    String veterinarianName = vetSnapshot.getString("nombre");
+                    response.setVeterinarianName(veterinarianName);
+                    System.out.println("Nombre del veterinario: " + veterinarianName);
+                } else {
+                    System.out.println("Advertencia: No se encontró el veterinario con ID: " + record.getVeterinarianId());
+                    response.setVeterinarianName("Desconocido");
+                }
+
+                // Obtener el nombre de la mascota desde los datos de la colección 'medicalHistory'
+                response.setPetName(record.getPetName()); // Como ahora el nombre está en el registro médico
+
+                // Agregar el response a la lista
+                responseList.add(response);
+            }
+
+            System.out.println("Se retornaron " + responseList.size() + " registros de historial médico.");
+            return responseList;
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error al obtener el historial médico con detalles: " + e.getMessage());
+            throw new CustomExceptions.ProcessingException("Error fetching pet's medical history with details: " + e.getMessage());
+        }
+    }
+
+
+
 
     public MedicalRecordResponse addMedicalRecord(String petId, AddMedicalRecordRequest request) {
         try {
