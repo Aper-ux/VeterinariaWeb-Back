@@ -1,12 +1,12 @@
 package com.example.demo.service;
 
-import com.example.demo.dto.AppointmentDTOs;
+import com.example.demo.dto.*;
 import com.example.demo.dto.AppointmentDTOs.*;
-import com.example.demo.dto.PetDTOs;
-import com.example.demo.dto.UserDTOs;
 import com.example.demo.exception.CustomExceptions;
 import com.example.demo.model.Appointment;
 import com.google.cloud.firestore.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -33,12 +33,16 @@ public class AppointmentService {
 
     private static final long MINIMUM_CANCELLATION_HOURS = 24;
     private static final long MINIMUM_RESCHEDULE_HOURS = 24;
+    private static final Logger logger = LoggerFactory.getLogger(AppointmentService.class);
 
     /**
      * Obtiene las citas del día para un veterinario específico
      */
-    public AppointmentSummary getVeterinarianDailyAppointments(String veterinarianId, Date date) {
+    public PaginatedResponse<AppointmentResponse> getVeterinarianDailyAppointments(
+            String veterinarianId, Date date, PaginationRequest request) {
         try {
+            CollectionReference appointmentsRef = firestore.collection("appointments");
+
             // Convertir la fecha a LocalDate para comparar solo la fecha sin hora
             LocalDate appointmentDate = date.toInstant()
                     .atZone(ZoneId.systemDefault())
@@ -48,17 +52,32 @@ public class AppointmentService {
             Date startOfDay = Date.from(appointmentDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
             Date endOfDay = Date.from(appointmentDate.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant());
 
-            // Consultar las citas del día
-            QuerySnapshot querySnapshot = firestore.collection("appointments")
+            // Construir query base con filtros de fecha y veterinario
+            Query query = appointmentsRef
                     .whereEqualTo("veterinarianId", veterinarianId)
                     .whereGreaterThanOrEqualTo("appointmentDate", startOfDay)
-                    .whereLessThan("appointmentDate", endOfDay)
-                    .orderBy("appointmentDate", Query.Direction.ASCENDING)
-                    .get()
-                    .get();
+                    .whereLessThan("appointmentDate", endOfDay);
 
+            // Aplicar filtros adicionales si existen
+            if (request.getFilterBy() != null && request.getFilterValue() != null) {
+                query = query.whereEqualTo(request.getFilterBy(), request.getFilterValue());
+            }
+
+            // Aplicar ordenamiento
+            Query.Direction direction = request.getSortDirection().equalsIgnoreCase("DESC")
+                    ? Query.Direction.DESCENDING
+                    : Query.Direction.ASCENDING;
+            query = query.orderBy(request.getSortBy(), direction);
+
+            // Aplicar paginación
+            query = query.offset(request.getPage() * request.getSize())
+                    .limit(request.getSize());
+
+            // Ejecutar query
+            QuerySnapshot querySnapshot = query.get().get();
+
+            // Convertir y enriquecer resultados
             List<AppointmentResponse> appointments = new ArrayList<>();
-
             for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                 Appointment appointment = doc.toObject(Appointment.class);
                 if (appointment != null) {
@@ -66,13 +85,77 @@ public class AppointmentService {
                 }
             }
 
-            return new AppointmentSummary(
-                    appointments,
-                    appointments.size(),
-                    date
-            );
+            // Contar total de elementos para este día y veterinario
+            long totalElements = appointmentsRef
+                    .whereEqualTo("veterinarianId", veterinarianId)
+                    .whereGreaterThanOrEqualTo("appointmentDate", startOfDay)
+                    .whereLessThan("appointmentDate", endOfDay)
+                    .get().get().size();
+
+            return PaginatedResponse.of(appointments, request, totalElements);
+
         } catch (Exception e) {
-            throw new CustomExceptions.ProcessingException("Error getting daily appointments: " + e.getMessage());
+            throw new CustomExceptions.ProcessingException(
+                    "Error getting daily appointments: " + e.getMessage());
+        }
+    }
+    public PaginatedResponse<AppointmentResponse> getDailyAppointments(
+            String veterinarianId, Date date, PaginationRequest request) {
+        try {
+            CollectionReference appointmentsRef = firestore.collection("appointments");
+
+            // Obtener inicio y fin del día
+            LocalDate appointmentDate = date.toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate();
+            Date startOfDay = Date.from(appointmentDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+            Date endOfDay = Date.from(appointmentDate.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant());
+
+            // Query base con filtros de fecha y veterinario
+            Query query = appointmentsRef
+                    .whereEqualTo("veterinarianId", veterinarianId)
+                    .whereGreaterThanOrEqualTo("appointmentDate", startOfDay)
+                    .whereLessThan("appointmentDate", endOfDay);
+
+            // Aplicar filtros adicionales
+            if (request.getFilterBy() != null && request.getFilterValue() != null) {
+                query = query.whereEqualTo(request.getFilterBy(), request.getFilterValue());
+            }
+
+            // Ordenamiento
+            Query.Direction direction = request.getSortDirection().equalsIgnoreCase("DESC")
+                    ? Query.Direction.DESCENDING
+                    : Query.Direction.ASCENDING;
+            query = query.orderBy(request.getSortBy(), direction);
+
+            // Paginación
+            query = query.offset(request.getPage() * request.getSize())
+                    .limit(request.getSize());
+
+            QuerySnapshot querySnapshot = query.get().get();
+
+            List<AppointmentResponse> appointments = querySnapshot.getDocuments().stream()
+                    .map(doc -> {
+                        Appointment appointment = doc.toObject(Appointment.class);
+                        try {
+                            return enrichAppointmentResponse(appointment);
+                        } catch (ExecutionException | InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    })
+                    .collect(Collectors.toList());
+
+            // Contar total de citas para este día y veterinario
+            long totalElements = appointmentsRef
+                    .whereEqualTo("veterinarianId", veterinarianId)
+                    .whereGreaterThanOrEqualTo("appointmentDate", startOfDay)
+                    .whereLessThan("appointmentDate", endOfDay)
+                    .get().get().size();
+
+            return PaginatedResponse.of(appointments, request, totalElements);
+        } catch (Exception e) {
+            throw new CustomExceptions.ProcessingException(
+                    "Error fetching daily appointments: " + e.getMessage());
         }
     }
 
@@ -96,54 +179,103 @@ public class AppointmentService {
         // Obtener información de la mascota
         response.setPet(petService.getPetById(appointment.getPetId()));
 
-        // Obtener historial médico de la mascota
-        response.setPetHistory(petService.getPetMedicalHistory(appointment.getPetId()));
+        // Obtener historial médico de la mascota - Agregamos el objeto de paginación
+        PaginationRequest defaultPagination = new PaginationRequest();
+        defaultPagination.setPage(0);
+        defaultPagination.setSize(5); // Limitamos a los últimos 5 registros
+        defaultPagination.setSortBy("date");
+        defaultPagination.setSortDirection("DESC");
+
+        PaginatedResponse<PetDTOs.MedicalRecordResponse> historyResponse =
+                petService.getPetMedicalHistory(appointment.getPetId(), defaultPagination);
+        response.setPetHistory(historyResponse.getContent());
 
         return response;
     }
     /**
      * Obtiene todas las citas de las mascotas del cliente actual
      */
-    public List<AppointmentDTOs.AppointmentSummaryByPet> getClientPetsAppointments() {
-        String clientId = SecurityContextHolder.getContext().getAuthentication().getName();
-
+    public PaginatedResponse<AppointmentSummaryByPet> getClientPetsAppointments(
+            PaginationRequest paginationRequest) {
         try {
-            // Obtener todas las mascotas del cliente
+            String clientId = SecurityContextHolder.getContext().getAuthentication().getName();
+
+            // Obtener las mascotas del cliente
             List<PetDTOs.PetResponse> clientPets = petService.getPetsByUserId(clientId);
-            List<AppointmentDTOs.AppointmentSummaryByPet> summaries = new ArrayList<>();
+
+            List<AppointmentSummaryByPet> summaries = new ArrayList<>();
 
             for (PetDTOs.PetResponse pet : clientPets) {
-                // Obtener citas de cada mascota
-                QuerySnapshot appointmentsSnapshot = firestore.collection("appointments")
+                // Consultar citas para cada mascota
+                CollectionReference appointmentsRef = firestore.collection("appointments");
+                Query query = appointmentsRef
                         .whereEqualTo("petId", pet.getId())
-                        .whereGreaterThanOrEqualTo("appointmentDate", new Date())
-                        .orderBy("appointmentDate", Query.Direction.ASCENDING)
-                        .get()
-                        .get();
+                        .whereGreaterThanOrEqualTo("appointmentDate", new Date());
 
-                List<AppointmentDTOs.AppointmentResponse> appointments = appointmentsSnapshot.getDocuments().stream()
+                // Aplicar filtros si existen
+                if (paginationRequest.getFilterBy() != null &&
+                        paginationRequest.getFilterValue() != null) {
+                    query = query.whereEqualTo(
+                            paginationRequest.getFilterBy(),
+                            paginationRequest.getFilterValue()
+                    );
+                }
+
+                // Aplicar ordenamiento
+                String sortBy = paginationRequest.getSortBy().equals("id") ?
+                        "appointmentDate" : paginationRequest.getSortBy();
+                Query.Direction direction = paginationRequest.getSortDirection()
+                        .equalsIgnoreCase("DESC") ?
+                        Query.Direction.DESCENDING :
+                        Query.Direction.ASCENDING;
+
+                query = query.orderBy(sortBy, direction);
+
+                // Aplicar paginación
+                query = query
+                        .offset(paginationRequest.getPage() * paginationRequest.getSize())
+                        .limit(paginationRequest.getSize());
+
+                // Ejecutar query
+                QuerySnapshot querySnapshot = query.get().get();
+
+                // Convertir resultados
+                List<AppointmentResponse> appointments = querySnapshot.getDocuments()
+                        .stream()
                         .map(doc -> {
-                            Appointment appointment = doc.toObject(Appointment.class);
                             try {
+                                Appointment appointment = doc.toObject(Appointment.class);
                                 return enrichAppointmentResponse(appointment);
-                            } catch (ExecutionException e) {
-                                throw new RuntimeException(e);
-                            } catch (InterruptedException e) {
-                                throw new RuntimeException(e);
+                            } catch (Exception e) {
+                                logger.error("Error enriching appointment", e);
+                                return null;
                             }
                         })
+                        .filter(Objects::nonNull)
                         .collect(Collectors.toList());
 
-                summaries.add(new AppointmentDTOs.AppointmentSummaryByPet(
-                        pet,
-                        appointments,
-                        appointments.size()
-                ));
+                if (!appointments.isEmpty()) {
+                    summaries.add(new AppointmentSummaryByPet(
+                            pet,
+                            appointments,
+                            appointments.size()
+                    ));
+                }
             }
 
-            return summaries;
+            // Calcular el total de elementos para la paginación
+            long totalElements = summaries.size();
+
+            return PaginatedResponse.of(
+                    summaries,
+                    paginationRequest,
+                    totalElements
+            );
+
         } catch (Exception e) {
-            throw new CustomExceptions.ProcessingException("Error getting client pets appointments: " + e.getMessage());
+            throw new CustomExceptions.ProcessingException(
+                    "Error fetching client pets appointments: " + e.getMessage()
+            );
         }
     }
 

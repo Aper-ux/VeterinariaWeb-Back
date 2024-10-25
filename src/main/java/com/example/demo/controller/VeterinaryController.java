@@ -1,8 +1,6 @@
 package com.example.demo.controller;
 
-import com.example.demo.dto.ApiResponse;
-import com.example.demo.dto.PetDTOs;
-import com.example.demo.dto.UserDTOs;
+import com.example.demo.dto.*;
 import com.example.demo.service.VeterinaryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -21,14 +19,16 @@ public class VeterinaryController {
     private VeterinaryService veterinaryService;
 
     @GetMapping("/search")
-    @PreAuthorize("hasPermission(null, 'BUSCAR_CLIENTE')")
-    public ResponseEntity<ApiResponse<List<UserDTOs.ClientWithPetsDTO>>> searchClients(
+    @PreAuthorize("hasPermission('', 'BUSCAR_CLIENTE')")
+    public ResponseEntity<ApiResponse<PaginatedResponse<UserDTOs.ClientWithPetsDTO>>> searchClients(
+            @ModelAttribute PaginationRequest paginationRequest,
             @RequestParam(required = false) String clientName,
             @RequestParam(required = false) String petName,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate consultationDate) {
 
         UserDTOs.ClientSearchCriteria criteria = new UserDTOs.ClientSearchCriteria(clientName, petName, consultationDate);
-        return ResponseEntity.ok(ApiResponse.success(veterinaryService.searchClients(criteria)));
+        return ResponseEntity.ok(ApiResponse.success(
+                veterinaryService.searchClients(criteria, paginationRequest)));
     }
 
     @GetMapping("/clients/{clientId}/pets")
@@ -47,8 +47,10 @@ public class VeterinaryController {
 
     @GetMapping("/pets/{petId}/medical-records")
     @PreAuthorize("hasPermission(null, 'OBTENER_MEDICAL_HISTORY')")
-    public ResponseEntity<ApiResponse<List<PetDTOs.MedicalRecordResponse>>> getMedicalHistory(
-            @PathVariable String petId) {
-        return ResponseEntity.ok(ApiResponse.success(veterinaryService.getMedicalHistory(petId)));
+    public ResponseEntity<ApiResponse<PaginatedResponse<PetDTOs.MedicalRecordResponse>>> getMedicalHistory(
+            @PathVariable String petId,
+            @ModelAttribute PaginationRequest paginationRequest) {
+        return ResponseEntity.ok(ApiResponse.success(
+                veterinaryService.getMedicalHistory(petId, paginationRequest)));
     }
 }

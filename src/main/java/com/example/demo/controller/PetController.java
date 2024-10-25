@@ -1,6 +1,8 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.ApiResponse;
+import com.example.demo.dto.PaginatedResponse;
+import com.example.demo.dto.PaginationRequest;
 import com.example.demo.dto.PetDTOs.*;
 import com.example.demo.exception.CustomExceptions;
 import com.example.demo.service.PetService;
@@ -44,8 +46,10 @@ public class PetController {
 
     @GetMapping("/{id}/medical-history")
     @PreAuthorize("hasPermission('', 'VER_HISTORIAL_MEDICO') or @petService.isOwner(#id)")
-    public ResponseEntity<ApiResponse<List<MedicalRecordResponse>>> getPetMedicalHistory(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.success(petService.getPetMedicalHistory(id)));
+    public ResponseEntity<ApiResponse<PaginatedResponse<MedicalRecordResponse>>> getPetMedicalHistory(
+            @PathVariable String id,
+            @ModelAttribute PaginationRequest paginationRequest) {
+        return ResponseEntity.ok(ApiResponse.success(petService.getPetMedicalHistory(id, paginationRequest)));
     }
 
     @PostMapping("/{id}/medical-record")
@@ -72,7 +76,15 @@ public class PetController {
     }
     @GetMapping
     @PreAuthorize("hasPermission('', 'VER_TODAS_LAS_MASCOTAS')")
-    public ResponseEntity<ApiResponse<List<PetResponse>>> getAllPets() {
-        return ResponseEntity.ok(ApiResponse.success(petService.getAllPets()));
+    public ResponseEntity<ApiResponse<PaginatedResponse<PetResponse>>> getAllPets(
+            @ModelAttribute PaginationRequest paginationRequest) {
+        return ResponseEntity.ok(ApiResponse.success(petService.getAllPets(paginationRequest)));
+    }
+    @GetMapping("/user/{userId}/pets")
+    @PreAuthorize("hasPermission('', 'VER_MASCOTAS_USUARIO')")
+    public ResponseEntity<ApiResponse<PaginatedResponse<PetResponse>>> getPetsByUserId(
+            @PathVariable String userId,
+            @ModelAttribute PaginationRequest paginationRequest) {
+        return ResponseEntity.ok(ApiResponse.success(petService.getPetsByUserId(userId, paginationRequest)));
     }
 }

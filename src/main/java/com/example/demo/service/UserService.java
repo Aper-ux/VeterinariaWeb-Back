@@ -1,14 +1,14 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.AuthDTOs.RegisterRequest;
+import com.example.demo.dto.PaginatedResponse;
+import com.example.demo.dto.PaginationRequest;
 import com.example.demo.dto.PetDTOs;
 import com.example.demo.dto.UserDTOs.*;
 import com.example.demo.exception.CustomExceptions;
 import com.example.demo.model.Role;
 import com.example.demo.model.User;
-import com.google.cloud.firestore.DocumentSnapshot;
-import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.QuerySnapshot;
+import com.google.cloud.firestore.*;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.UserRecord;
@@ -164,29 +164,53 @@ public class UserService {
         }
     }
 
-    public List<UserResponse> getAllUsers(Boolean isActive, String role) {
+    public PaginatedResponse<UserResponse> getAllUsers(PaginationRequest request,
+                                                       Boolean isActive, String role) {
         try {
-            List<UserResponse> users = new ArrayList<>();
-            QuerySnapshot querySnapshot = getFirestore().collection("users").get().get();
+            CollectionReference usersRef = getFirestore().collection("users");
+            Query query = usersRef;
 
-            for (DocumentSnapshot document : querySnapshot.getDocuments()) {
-                User user = document.toObject(User.class);
-                if (user != null) {
-                    // Asegúrate de que el UID se establezca correctamente
-                    user.setUid(document.getId());
-
-                    // Aplicar filtros si están presentes
-                    if ((isActive == null || user.isActive() == isActive) &&
-                            (role == null || (user.getRoles() != null && user.getRoles().contains(Role.valueOf(role.toUpperCase()))))) {
-                        users.add(convertToUserResponse(user));
-                    }
-                }
+            // Aplicar filtros específicos
+            if (isActive != null) {
+                query = query.whereEqualTo("active", isActive);
+            }
+            if (role != null) {
+                query = query.whereArrayContains("roles", Role.valueOf(role.toUpperCase()));
             }
 
-            logger.info("Retrieved {} users from Firestore", users.size());
-            return users;
-        } catch (InterruptedException | ExecutionException e) {
-            logger.error("Error fetching users: ", e);
+            // Aplicar filtros generales si existen
+            if (request.getFilterBy() != null && request.getFilterValue() != null) {
+                query = query.whereEqualTo(request.getFilterBy(), request.getFilterValue());
+            }
+
+            // Aplicar ordenamiento
+            Query.Direction direction = request.getSortDirection().equalsIgnoreCase("DESC")
+                    ? Query.Direction.DESCENDING
+                    : Query.Direction.ASCENDING;
+            query = query.orderBy(request.getSortBy(), direction);
+
+            // Aplicar paginación
+            query = query.offset(request.getPage() * request.getSize())
+                    .limit(request.getSize());
+
+            // Ejecutar query
+            QuerySnapshot querySnapshot = query.get().get();
+
+            // Convertir resultados
+            List<UserResponse> users = querySnapshot.getDocuments().stream()
+                    .map(doc -> {
+                        User user = doc.toObject(User.class);
+                        user.setUid(doc.getId());
+                        return convertToUserResponse(user);
+                    })
+                    .collect(Collectors.toList());
+
+            // Contar total de elementos
+            long totalElements = usersRef.get().get().size();
+
+            return PaginatedResponse.of(users, request, totalElements);
+
+        } catch (Exception e) {
             throw new CustomExceptions.ProcessingException("Error fetching users: " + e.getMessage());
         }
     }

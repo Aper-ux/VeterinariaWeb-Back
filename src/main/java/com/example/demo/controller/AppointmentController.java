@@ -3,6 +3,8 @@ package com.example.demo.controller;
 import com.example.demo.dto.ApiResponse;
 import com.example.demo.dto.AppointmentDTOs;
 import com.example.demo.dto.AppointmentDTOs.*;
+import com.example.demo.dto.PaginatedResponse;
+import com.example.demo.dto.PaginationRequest;
 import com.example.demo.service.AppointmentService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,23 +24,22 @@ public class AppointmentController {
 
     @GetMapping("/daily")
     @PreAuthorize("hasPermission(null, 'VER_CITAS_DIARIAS')")
-    public ResponseEntity<ApiResponse<AppointmentSummary>> getDailyAppointments(
+    public ResponseEntity<ApiResponse<PaginatedResponse<AppointmentResponse>>> getDailyAppointments(
+            @ModelAttribute PaginationRequest paginationRequest,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date date,
-            @RequestParam String veterinarianId
-    ) {
+            @RequestParam String veterinarianId) {
         if (date == null) {
-            date = new Date(); // Si no se proporciona fecha, usar la fecha actual
+            date = new Date();
         }
         return ResponseEntity.ok(ApiResponse.success(
-                appointmentService.getVeterinarianDailyAppointments(veterinarianId, date)
-        ));
+                appointmentService.getVeterinarianDailyAppointments(veterinarianId, date, paginationRequest)));
     }
     @GetMapping("/my-pets")
-    @PreAuthorize("hasPermission(null, 'VER_CITAS_DE_MASCOTAS_MIAS')")
-    public ResponseEntity<ApiResponse<List<AppointmentSummaryByPet>>> getClientPetsAppointments() {
+    @PreAuthorize("hasPermission('', 'VER_CITAS_MASCOTAS')")
+    public ResponseEntity<ApiResponse<PaginatedResponse<AppointmentSummaryByPet>>> getClientPetsAppointments(
+            @ModelAttribute PaginationRequest paginationRequest) {
         return ResponseEntity.ok(ApiResponse.success(
-                appointmentService.getClientPetsAppointments()
-        ));
+                appointmentService.getClientPetsAppointments(paginationRequest)));
     }
     @PostMapping("/schedule")
     @PreAuthorize("hasPermission(null, 'PROGRAMAR_CITA')")

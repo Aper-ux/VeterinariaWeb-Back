@@ -28,6 +28,22 @@ import java.util.Collections;
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)  // Asegura que los permisos en métodos sean procesados
 public class SecurityConfig {
+    private static final String[] WHITE_LIST_URL = {
+            "/api/auth/login",
+            "/api/auth/register",
+            "/v2/api-docs",
+            "/v3/api-docs",
+            "/v3/api-docs/**",
+            "/swagger-resources",
+            "/swagger-resources/**",
+            "/configuration/ui",
+            "/configuration/security",
+            "/swagger-ui/**",
+            "/swagger-ui.html",
+            "/webjars/**",
+            "/swagger-ui/index.html",
+            "/favicon.ico"
+    };
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -50,7 +66,8 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> {
-                    authorize.requestMatchers("/api/auth/login", "/api/auth/register").permitAll();
+                    //authorize.requestMatchers("/api/auth/login", "/api/auth/register").permitAll();
+                    authorize.requestMatchers(WHITE_LIST_URL).permitAll();
 //                    authorize.requestMatchers(HttpMethod.POST, "/api/users/create-with-roles").hasAuthority("ROLE_VETERINARIO");
 //                    authorize.requestMatchers(HttpMethod.GET, "/api/users").hasAuthority("ROLE_VETERINARIO");
 //                    authorize.requestMatchers(HttpMethod.POST, "/api/users").hasAuthority("ROLE_VETERINARIO");

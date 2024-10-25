@@ -1,8 +1,6 @@
 package com.example.demo.controller;
 
-import com.example.demo.dto.ApiResponse;
-import com.example.demo.dto.AuthDTOs;
-import com.example.demo.dto.PetDTOs;
+import com.example.demo.dto.*;
 import com.example.demo.dto.UserDTOs.*;
 import com.example.demo.exception.CustomExceptions;
 import com.example.demo.service.UserService;
@@ -25,17 +23,19 @@ public class UserController {
 
     @PreAuthorize("hasPermission(null, 'VER_USUARIOS')")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers(
+    public ResponseEntity<ApiResponse<PaginatedResponse<UserResponse>>> getAllUsers(
+            @ModelAttribute PaginationRequest paginationRequest,
             @RequestParam(required = false) Boolean isActive,
             @RequestParam(required = false) String role) {
         try {
-            List<UserResponse> users = userService.getAllUsers(isActive, role);
-            return ResponseEntity.ok(ApiResponse.success(users));
+            return ResponseEntity.ok(ApiResponse.success(
+                    userService.getAllUsers(paginationRequest, isActive, role)));
         } catch (CustomExceptions.ProcessingException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("PROCESSING_ERROR", e.getMessage()));
         }
     }
+
 
  /*
     @PreAuthorize("hasPermission(null, 'VER_USUARIOS')")

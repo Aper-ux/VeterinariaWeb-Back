@@ -18,7 +18,6 @@ import java.util.List;
 
 public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
-
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -51,8 +50,16 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean isPublicEndpoint(HttpServletRequest request) {
-        return request.getRequestURI().contains("/api/auth/login") ||
-                request.getRequestURI().contains("/api/auth/register");
+        String path = request.getRequestURI();
+        return path.contains("/api/auth/login") ||
+                path.contains("/api/auth/register") ||
+                path.contains("/v3/api-docs") ||
+                path.contains("/swagger-ui/") ||
+                path.contains("/swagger-resources") ||
+                path.contains("/configuration/") ||
+                path.contains("/webjars/") ||
+                path.contains("/swagger-ui.html") ||
+                path.contains("favicon.ico");
     }
 
     private String extractToken(HttpServletRequest request) {

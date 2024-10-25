@@ -1,5 +1,7 @@
 package com.example.demo.service;
 
+import com.example.demo.dto.PaginatedResponse;
+import com.example.demo.dto.PaginationRequest;
 import com.example.demo.dto.PetDTOs;
 import com.example.demo.dto.UserDTOs;
 import com.example.demo.exception.CustomExceptions;
@@ -7,10 +9,8 @@ import com.example.demo.model.MedicalRecord;
 import com.example.demo.model.Pet;
 import com.example.demo.model.Role;
 import com.example.demo.model.User;
-import com.google.cloud.firestore.DocumentSnapshot;
-import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.Query;
-import com.google.cloud.firestore.QuerySnapshot;
+import com.example.demo.util.FirestorePaginationUtils;
+import com.google.cloud.firestore.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +49,7 @@ public class VeterinaryService {
     /**
      * Busca clientes y sus mascotas según los criterios especificados
      */
+    /*
     public List<UserDTOs.ClientWithPetsDTO> searchClients(UserDTOs.ClientSearchCriteria criteria) {
         try {
             // Crear query base
@@ -97,6 +98,73 @@ public class VeterinaryService {
         }
     }
 
+     */
+    public PaginatedResponse<UserDTOs.ClientWithPetsDTO> searchClients(
+            UserDTOs.ClientSearchCriteria criteria, PaginationRequest request) {
+        try {
+            CollectionReference usersRef = firestore.collection("users");
+            Query query = usersRef;
+
+            // Aplicar filtros de búsqueda
+            if (criteria.getClientName() != null) {
+                query = query.whereGreaterThanOrEqualTo("nombre", criteria.getClientName())
+                        .whereLessThanOrEqualTo("nombre", criteria.getClientName() + '\uf8ff');
+            }
+
+            // Aplicar filtros adicionales
+            if (request.getFilterBy() != null && request.getFilterValue() != null) {
+                query = query.whereEqualTo(request.getFilterBy(), request.getFilterValue());
+            }
+
+            // Ordenamiento
+            Query.Direction direction = request.getSortDirection().equalsIgnoreCase("DESC")
+                    ? Query.Direction.DESCENDING
+                    : Query.Direction.ASCENDING;
+            query = query.orderBy(request.getSortBy(), direction);
+
+            // Paginación
+            query = query.offset(request.getPage() * request.getSize())
+                    .limit(request.getSize());
+
+            QuerySnapshot querySnapshot = query.get().get();
+
+            List<UserDTOs.ClientWithPetsDTO> clients = new ArrayList<>();
+
+            for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                User user = doc.toObject(User.class);
+                if (user != null) {
+                    List<PetDTOs.PetWithHistoryDTO> pets = getPetsWithHistory(user.getUid());
+
+                    // Filtrar por nombre de mascota si es necesario
+                    if (criteria.getPetName() != null) {
+                        pets = pets.stream()
+                                .filter(pet -> pet.getName().toLowerCase()
+                                        .contains(criteria.getPetName().toLowerCase()))
+                                .collect(Collectors.toList());
+                    }
+
+                    // Filtrar por fecha de consulta si es necesario
+                    if (criteria.getConsultationDate() != null) {
+                        pets = filterPetsByConsultationDate(pets, criteria.getConsultationDate());
+                    }
+
+                    if (!pets.isEmpty()) {
+                        clients.add(convertToClientWithPetsDTO(user, pets));
+                    }
+                }
+            }
+
+            long totalElements = firestore.collection("users")
+                    .get().get().size();
+
+            return PaginatedResponse.of(clients, request, totalElements);
+
+        } catch (Exception e) {
+            throw new CustomExceptions.ProcessingException(
+                    "Error searching clients: " + e.getMessage());
+        }
+    }
+
     /**
      * Agrega un registro médico a una mascota
      */
@@ -139,16 +207,34 @@ public class VeterinaryService {
     /**
      * Obtiene el historial médico de una mascota
      */
-    public List<PetDTOs.MedicalRecordResponse> getMedicalHistory(String petId) {
+    public PaginatedResponse<PetDTOs.MedicalRecordResponse> getMedicalHistory(
+            String petId, PaginationRequest request) {
         try {
-            List<PetDTOs.MedicalRecordResponse> history = new ArrayList<>();
-            QuerySnapshot querySnapshot = firestore.collection("pets")
+            CollectionReference recordsRef = firestore.collection("pets")
                     .document(petId)
-                    .collection("medicalRecords")
-                    .orderBy("date", Query.Direction.DESCENDING)
-                    .get()
-                    .get();
+                    .collection("medicalRecords");
 
+            Query query = recordsRef;
+
+            // Aplicar filtros
+            if (request.getFilterBy() != null && request.getFilterValue() != null) {
+                query = query.whereEqualTo(request.getFilterBy(), request.getFilterValue());
+            }
+
+            // Ordenamiento por defecto por fecha si no se especifica otro campo
+            String sortBy = request.getSortBy().equals("id") ? "date" : request.getSortBy();
+            Query.Direction direction = request.getSortDirection().equalsIgnoreCase("DESC")
+                    ? Query.Direction.DESCENDING
+                    : Query.Direction.ASCENDING;
+            query = query.orderBy(sortBy, direction);
+
+            // Paginación
+            query = query.offset(request.getPage() * request.getSize())
+                    .limit(request.getSize());
+
+            QuerySnapshot querySnapshot = query.get().get();
+
+            List<PetDTOs.MedicalRecordResponse> history = new ArrayList<>();
             for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                 MedicalRecord record = doc.toObject(MedicalRecord.class);
                 if (record != null) {
@@ -156,26 +242,20 @@ public class VeterinaryService {
                 }
             }
 
-            return history;
+            long totalElements = FirestorePaginationUtils.getTotalElements(recordsRef);
+
+            return PaginatedResponse.of(history, request, totalElements);
+
         } catch (Exception e) {
-            throw new CustomExceptions.ProcessingException("Error fetching medical history: " + e.getMessage());
+            throw new CustomExceptions.ProcessingException(
+                    "Error fetching medical history: " + e.getMessage());
         }
     }
 
     // Métodos privados auxiliares...
-    private List<PetDTOs.PetWithHistoryDTO> filterPetsByConsultationDate(List<PetDTOs.PetWithHistoryDTO> pets, LocalDate date) {
-        return pets.stream()
-                .filter(pet -> pet.getMedicalHistory().stream()
-                        .anyMatch(record -> isSameDate(record.getDate(), date)))
-                .collect(Collectors.toList());
-    }
 
-    private boolean isSameDate(Date recordDate, LocalDate searchDate) {
-        LocalDate localRecordDate = recordDate.toInstant()
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate();
-        return localRecordDate.equals(searchDate);
-    }
+
+
 
     private void notifyOwner(String ownerId, String title, String message) {
         // Implementar notificación (por ejemplo, usando Firebase Cloud Messaging)
@@ -235,19 +315,32 @@ public class VeterinaryService {
      * Obtiene las mascotas con su historial médico para un cliente específico
      */
     private List<PetDTOs.PetWithHistoryDTO> getPetsWithHistory(String userId) throws ExecutionException, InterruptedException {
-        List<PetDTOs.PetWithHistoryDTO> petsWithHistory = new ArrayList<>();
-
         // Obtener todas las mascotas del usuario
         QuerySnapshot petsSnapshot = firestore.collection("pets")
                 .whereEqualTo("ownerId", userId)
                 .get()
                 .get();
 
+        List<PetDTOs.PetWithHistoryDTO> petsWithHistory = new ArrayList<>();
         for (DocumentSnapshot petDoc : petsSnapshot.getDocuments()) {
             Pet pet = petDoc.toObject(Pet.class);
             if (pet != null) {
-                // Obtener el historial médico de cada mascota
-                List<PetDTOs.MedicalRecordResponse> history = getMedicalHistory(pet.getId());
+                // Obtener historial médico básico (últimas 5 entradas)
+                QuerySnapshot historySnapshot = firestore.collection("pets")
+                        .document(pet.getId())
+                        .collection("medicalRecords")
+                        .orderBy("date", Query.Direction.DESCENDING)
+                        .limit(5)
+                        .get()
+                        .get();
+
+                List<PetDTOs.MedicalRecordResponse> history = historySnapshot.getDocuments().stream()
+                        .map(doc -> {
+                            MedicalRecord record = doc.toObject(MedicalRecord.class);
+                            return convertToMedicalRecordResponse(record);
+                        })
+                        .collect(Collectors.toList());
+
                 petsWithHistory.add(convertToPetWithHistoryDTO(pet, history));
             }
         }
@@ -336,6 +429,23 @@ public class VeterinaryService {
             logger.error("Error al obtener información del cliente y mascotas: {}", e.getMessage());
             throw new CustomExceptions.ProcessingException("Error al obtener información del cliente: " + e.getMessage());
         }
+    }
+    // Método auxiliar para filtrar mascotas por fecha de consulta
+    private List<PetDTOs.PetWithHistoryDTO> filterPetsByConsultationDate(
+            List<PetDTOs.PetWithHistoryDTO> pets, LocalDate consultationDate) {
+        return pets.stream()
+                .filter(pet -> pet.getMedicalHistory().stream()
+                        .anyMatch(record -> isSameDate(record.getDate(), consultationDate)))
+                .collect(Collectors.toList());
+    }
+
+    // Método auxiliar para verificar si dos fechas son iguales
+    private boolean isSameDate(Date date1, LocalDate date2) {
+        if (date1 == null || date2 == null) return false;
+        LocalDate localDate1 = date1.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
+        return localDate1.equals(date2);
     }
 
     /**

@@ -1,12 +1,15 @@
 package com.example.demo.service;
 
+import com.example.demo.dto.PaginatedResponse;
+import com.example.demo.dto.PaginationRequest;
 import com.example.demo.dto.PetDTOs.*;
 import com.example.demo.exception.CustomExceptions;
+import com.example.demo.model.MedicalRecord;
 import com.example.demo.model.Pet;
+import com.example.demo.model.User;
 import com.example.demo.repository.PetRepository;
-import com.google.cloud.firestore.DocumentReference;
-import com.google.cloud.firestore.DocumentSnapshot;
-import com.google.cloud.firestore.Firestore;
+import com.example.demo.util.FirestorePaginationUtils;
+import com.google.cloud.firestore.*;
 import com.google.firebase.cloud.FirestoreClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -103,19 +106,46 @@ public class PetService {
         }
     }
 
-    public List<MedicalRecordResponse> getPetMedicalHistory(String petId) {
+    public PaginatedResponse<MedicalRecordResponse> getPetMedicalHistory(String petId, PaginationRequest request) {
         try {
-            List<MedicalRecordResponse> medicalRecords = new ArrayList<>();
-            getFirestore().collection("pets").document(petId).collection("medicalRecords").get().get().getDocuments().forEach(doc -> {
-                MedicalRecordResponse record = doc.toObject(MedicalRecordResponse.class);
-                medicalRecords.add(record);
-            });
-            return medicalRecords;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new CustomExceptions.ProcessingException("Error fetching pet's medical history: " + e.getMessage());
+            CollectionReference recordsRef = firestore.collection("pets")
+                    .document(petId)
+                    .collection("medicalRecords");
+
+            Query query = recordsRef;
+
+            // Aplicar filtros
+            if (request.getFilterBy() != null && request.getFilterValue() != null) {
+                query = query.whereEqualTo(request.getFilterBy(), request.getFilterValue());
+            }
+
+            // Ordenamiento
+            Query.Direction direction = request.getSortDirection().equalsIgnoreCase("DESC")
+                    ? Query.Direction.DESCENDING
+                    : Query.Direction.ASCENDING;
+            query = query.orderBy(request.getSortBy(), direction);
+
+            // Paginación
+            query = query.offset(request.getPage() * request.getSize())
+                    .limit(request.getSize());
+
+            QuerySnapshot querySnapshot = query.get().get();
+
+            List<MedicalRecordResponse> records = querySnapshot.getDocuments().stream()
+                    .map(doc -> {
+                        MedicalRecord record = doc.toObject(MedicalRecord.class);
+                        return convertToMedicalRecordResponse(record);
+                    })
+                    .collect(Collectors.toList());
+
+            long totalElements = FirestorePaginationUtils.getTotalElements(recordsRef);
+
+            return PaginatedResponse.of(records, request, totalElements);
+        } catch (Exception e) {
+            throw new CustomExceptions.ProcessingException(
+                    "Error fetching medical history: " + e.getMessage());
         }
     }
-
     public MedicalRecordResponse addMedicalRecord(String petId, AddMedicalRecordRequest request) {
         try {
             MedicalRecordResponse record = new MedicalRecordResponse();
@@ -195,24 +225,116 @@ public class PetService {
             throw new CustomExceptions.ProcessingException("Error al eliminar la mascota: " + e.getMessage());
         }
     }
-    public List<PetResponse> getAllPets() {
+    public PaginatedResponse<PetResponse> getAllPets(PaginationRequest request) {
         try {
-            List<Pet> pets = petRepository.findAll(); // Obtener todas las mascotas desde el repositorio
+            // Obtener referencia a la colección
+            CollectionReference petsRef = firestore.collection("pets");
 
-            // Convertir las mascotas al formato de respuesta PetResponse
-            return pets.stream()
-                    .map(pet -> new PetResponse(
-                            pet.getId(),
-                            pet.getName(),
-                            pet.getSpecies(),
-                            pet.getBreed(),
-                            pet.getAge(),
-                            pet.getOwnerId()))
+            // Determinar dirección de ordenamiento
+            Query.Direction direction = request.getSortDirection().equalsIgnoreCase("DESC")
+                    ? Query.Direction.DESCENDING
+                    : Query.Direction.ASCENDING;
+
+            // Obtener datos paginados
+            QuerySnapshot querySnapshot = FirestorePaginationUtils.getPaginatedData(
+                    petsRef, request, direction
+            );
+
+            // Convertir documentos a PetResponse
+            List<PetResponse> pets = querySnapshot.getDocuments().stream()
+                    .map(doc -> {
+                        Pet pet = doc.toObject(Pet.class);
+                        return convertToPetResponse(pet);
+                    })
                     .collect(Collectors.toList());
 
+            // Obtener total de elementos
+            long totalElements = FirestorePaginationUtils.getTotalElements(petsRef);
+
+            // Crear respuesta paginada
+            return PaginatedResponse.of(pets, request, totalElements);
+
         } catch (Exception e) {
-            throw new CustomExceptions.ProcessingException("Error al obtener todas las mascotas: " + e.getMessage());
+            throw new CustomExceptions.ProcessingException("Error al obtener las mascotas: " + e.getMessage());
         }
+    }
+    public PaginatedResponse<PetResponse> getPetsByUserId(String userId, PaginationRequest request) {
+        try {
+            CollectionReference petsRef = firestore.collection("pets");
+            Query query = petsRef.whereEqualTo("ownerId", userId);
+
+            // Aplicar filtros adicionales si existen
+            if (request.getFilterBy() != null && request.getFilterValue() != null) {
+                query = query.whereEqualTo(request.getFilterBy(), request.getFilterValue());
+            }
+
+            // Aplicar ordenamiento
+            Query.Direction direction = request.getSortDirection().equalsIgnoreCase("DESC")
+                    ? Query.Direction.DESCENDING
+                    : Query.Direction.ASCENDING;
+            query = query.orderBy(request.getSortBy(), direction);
+
+            // Aplicar paginación
+            query = query.offset(request.getPage() * request.getSize())
+                    .limit(request.getSize());
+
+            // Ejecutar query
+            QuerySnapshot querySnapshot = query.get().get();
+
+            // Convertir resultados
+            List<PetResponse> pets = querySnapshot.getDocuments().stream()
+                    .map(doc -> {
+                        Pet pet = doc.toObject(Pet.class);
+                        return convertToPetResponse(pet);
+                    })
+                    .collect(Collectors.toList());
+
+            // Obtener total de elementos para este usuario
+            long totalElements = petsRef
+                    .whereEqualTo("ownerId", userId)
+                    .get().get().size();
+
+            return PaginatedResponse.of(pets, request, totalElements);
+
+        } catch (Exception e) {
+            throw new CustomExceptions.ProcessingException(
+                    "Error fetching user's pets: " + e.getMessage());
+        }
+    }
+    public MedicalRecordResponse convertToMedicalRecordResponse(MedicalRecord record) {
+        if (record == null) {
+            return null;
+        }
+
+        MedicalRecordResponse response = new MedicalRecordResponse();
+        response.setId(record.getId());
+        response.setDate(record.getDate());
+        response.setDiagnosis(record.getDiagnosis());
+        response.setTreatment(record.getTreatment());
+        response.setNotes(record.getNotes());
+        response.setVeterinarianId(record.getVeterinarianId());
+
+        // Obtener información del veterinario si está disponible
+        try {
+            if (record.getVeterinarianId() != null) {
+                DocumentSnapshot vetDoc = firestore.collection("users")
+                        .document(record.getVeterinarianId())
+                        .get()
+                        .get();
+
+                if (vetDoc.exists()) {
+                    User vet = vetDoc.toObject(User.class);
+                    if (vet != null) {
+                        response.setVeterinarianName(vet.getNombre() + " " + vet.getApellido());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Si hay error al obtener el veterinario, dejamos el nombre como null
+            //logger.warn("Error getting veterinarian info for medical record: {}", e.getMessage());
+        }
+
+        return response;
     }
 
 }
