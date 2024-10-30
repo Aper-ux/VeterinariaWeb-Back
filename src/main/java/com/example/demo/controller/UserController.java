@@ -39,6 +39,30 @@ public class UserController {
                     .body(ApiResponse.error("PROCESSING_ERROR", e.getMessage()));
         }
     }
+    @GetMapping("/veterinarians")
+    @PreAuthorize("hasPermission('', 'VER_VETERINARIOS')")
+    public ResponseEntity<ApiResponse<PaginatedResponse<UserResponse>>> getVeterinarians(
+            @ModelAttribute PaginationRequest paginationRequest) {
+        try {
+            // Configurar valores por defecto si no se proporcionan
+            if (paginationRequest.getSortBy() == null) {
+                paginationRequest.setSortBy("nombre");
+            }
+            if (paginationRequest.getSortDirection() == null) {
+                paginationRequest.setSortDirection("ASC");
+            }
+            if (paginationRequest.getSize() == 0) {
+                paginationRequest.setSize(10);
+            }
+
+            // Obtener veterinarios paginados
+            PaginatedResponse<UserResponse> veterinarians = userService.getVeterinarians(paginationRequest);
+            return ResponseEntity.ok(ApiResponse.success(veterinarians));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("PROCESSING_ERROR", e.getMessage()));
+        }
+    }
 
     @GetMapping("/search")
     @PreAuthorize("hasPermission(null, 'VER_USUARIOS')")

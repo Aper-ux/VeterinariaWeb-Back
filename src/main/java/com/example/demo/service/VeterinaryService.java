@@ -388,10 +388,12 @@ public class VeterinaryService {
             // Verificar que el usuario actual es veterinario
             String currentUserId = SecurityContextHolder.getContext().getAuthentication().getName();
             UserDTOs.UserResponse currentUser = userService.getUserById(currentUserId);
-            if (!currentUser.getRoles().contains(Role.VETERINARIO)) {
+            /*
+            if (!currentUser.getRoles().contains(Role.VETERINARIO) ) {
                 throw new CustomExceptions.UnauthorizedException("Solo los veterinarios pueden acceder a esta información");
             }
 
+             */
             // Obtener información del cliente
             DocumentSnapshot clientDoc = firestore.collection("users")
                     .document(clientId)

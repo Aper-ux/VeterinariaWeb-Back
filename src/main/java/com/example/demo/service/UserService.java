@@ -263,6 +263,49 @@ public class UserService {
             throw new CustomExceptions.ProcessingException("Error fetching users: " + e.getMessage());
         }
     }
+    public PaginatedResponse<UserResponse> getVeterinarians(PaginationRequest request) {
+        try {
+            CollectionReference usersRef = firestore.collection("users");
+            Query query = usersRef;
+
+            // Filtrar solo veterinarios
+            query = query.whereArrayContains("roles", Role.VETERINARIO)
+                    .whereEqualTo("active", true); // Solo veterinarios activos
+
+            // Aplicar ordenamiento
+            Query.Direction direction = request.getSortDirection().equalsIgnoreCase("DESC")
+                    ? Query.Direction.DESCENDING
+                    : Query.Direction.ASCENDING;
+            query = query.orderBy(request.getSortBy(), direction);
+
+            // Aplicar paginación
+            query = query.offset(request.getPage() * request.getSize())
+                    .limit(request.getSize());
+
+            // Ejecutar query
+            QuerySnapshot querySnapshot = query.get().get();
+
+            // Convertir resultados
+            List<UserResponse> veterinarians = querySnapshot.getDocuments().stream()
+                    .map(doc -> {
+                        User user = doc.toObject(User.class);
+                        user.setUid(doc.getId()); // Asegurar que el ID esté establecido
+                        return convertToUserResponse(user);
+                    })
+                    .collect(Collectors.toList());
+
+            // Obtener el total de elementos
+            Query countQuery = usersRef.whereArrayContains("roles", Role.VETERINARIO)
+                    .whereEqualTo("active", true);
+            long totalElements = countQuery.get().get().size();
+
+            // Crear y retornar la respuesta paginada
+            return PaginatedResponse.of(veterinarians, request, totalElements);
+
+        } catch (Exception e) {
+            throw new CustomExceptions.ProcessingException("Error fetching veterinarians: " + e.getMessage());
+        }
+    }
 
     public UserResponse updateUser(String id, UpdateUserRequest request) {
         try {
