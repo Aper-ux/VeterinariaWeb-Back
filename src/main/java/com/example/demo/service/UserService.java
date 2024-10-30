@@ -35,6 +35,8 @@ public class UserService {
     PetService petService;
     @Autowired
     private FirebaseAuth firebaseAuth;
+    @Autowired
+    private Firestore firestore;
     private Firestore getFirestore() {
         return FirestoreClient.getFirestore();
     }
@@ -46,6 +48,51 @@ public class UserService {
             return notes;
         } catch (InterruptedException | ExecutionException e) {
             throw new CustomExceptions.ProcessingException("Error fetching user notes: " + e.getMessage());
+        }
+    }
+    // En UserService.java
+    public PaginatedResponse<UserResponse> searchUsers(String searchTerm, PaginationRequest request) {
+        try {
+            CollectionReference usersRef = firestore.collection("users");
+
+            // Crear una consulta base que filtre primero por el rol CLIENTE
+            Query baseQuery = usersRef.whereArrayContains("roles", Role.CLIENTE);
+
+            // Obtener todos los documentos que son clientes
+            QuerySnapshot allClientsSnapshot = baseQuery.get().get();
+
+            // Filtrar en memoria por el término de búsqueda (case insensitive)
+            List<UserResponse> filteredUsers = allClientsSnapshot.getDocuments().stream()
+                    .map(doc -> doc.toObject(User.class))
+                    .filter(user ->
+                            (user.getNombre() + " " + user.getApellido())
+                                    .toLowerCase()
+                                    .contains(searchTerm.toLowerCase()) ||
+                                    user.getEmail().toLowerCase().contains(searchTerm.toLowerCase()) ||
+                                    user.getTelefono().contains(searchTerm)
+                    )
+                    .map(this::convertToUserResponse)
+                    .collect(Collectors.toList());
+
+            // Calcular el total de elementos y páginas
+            long totalElements = filteredUsers.size();
+            int totalPages = (int) Math.ceil((double) totalElements / request.getSize());
+
+            // Aplicar paginación a los resultados filtrados
+            List<UserResponse> paginatedUsers = filteredUsers.stream()
+                    .skip((long) request.getPage() * request.getSize())
+                    .limit(request.getSize())
+                    .collect(Collectors.toList());
+
+            return new PaginatedResponse<>(
+                    paginatedUsers,
+                    request.getPage(),
+                    request.getSize(),
+                    totalElements,
+                    totalPages
+            );
+        } catch (Exception e) {
+            throw new CustomExceptions.ProcessingException("Error searching users: " + e.getMessage());
         }
     }
 
@@ -164,6 +211,8 @@ public class UserService {
         }
     }
 
+    // En UserService.java
+    // En UserService.java
     public PaginatedResponse<UserResponse> getAllUsers(PaginationRequest request,
                                                        Boolean isActive, String role) {
         try {
@@ -390,10 +439,17 @@ public class UserService {
             if (user == null) {
                 throw new CustomExceptions.UserNotFoundException("User not found with id: " + uid);
             }
-            user.setNombre(request.getNombre());
-            user.setApellido(request.getApellido());
-            user.setTelefono(request.getTelefono());
-            user.setDireccion(request.getDireccion());
+            User updatedUser = User.builder()
+                    .uid(user.getUid())
+                    .email(user.getEmail())
+                    .nombre(request.getNombre())
+                    .apellido(request.getApellido())
+                    .telefono(request.getTelefono())
+                    .direccion(request.getDireccion())
+                    .roles(user.getRoles())  // Mantener roles existentes
+                    .isEnabled(user.isEnabled())
+                    .active(user.isActive())
+                    .build();
 
             getFirestore().collection("users").document(uid).set(user).get();
             return convertToUserResponse(user);
@@ -423,12 +479,28 @@ public class UserService {
     }
     public UserResponse updateCurrentUserProfile(UpdateProfileRequest request) {
         String uid = getCurrentUserUid();
-        User user = getUserEntityById(uid);
-        user.setNombre(request.getNombre());
-        user.setApellido(request.getApellido());
-        user.setTelefono(request.getTelefono());
-        user.setDireccion(request.getDireccion());
-        return updateUser(uid, convertToUpdateUserRequest(user));
+        try {
+            User user = getFirestore().collection("users").document(uid).get().get().toObject(User.class);
+            if (user == null) {
+                throw new CustomExceptions.UserNotFoundException("User not found with id: " + uid);
+            }
+            User updatedUser = User.builder()
+                    .uid(user.getUid())
+                    .email(user.getEmail())
+                    .nombre(request.getNombre())
+                    .apellido(request.getApellido())
+                    .telefono(request.getTelefono())
+                    .direccion(request.getDireccion())
+                    .roles(user.getRoles())  // Mantener roles existentes
+                    .isEnabled(user.isEnabled())
+                    .active(user.isActive())
+                    .build();
+
+            getFirestore().collection("users").document(uid).set(updatedUser).get();
+            return convertToUserResponse(user);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new CustomExceptions.ProcessingException("Error updating user profile: " + e.getMessage());
+        }
     }
 
     public List<PetDTOs.PetResponse> getCurrentUserPets() {

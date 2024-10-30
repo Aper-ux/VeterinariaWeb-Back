@@ -428,14 +428,17 @@ public class AppointmentService {
         );
     }
     public AppointmentResponse createAppointment(CreateAppointmentRequest request) {
-        String clientId = SecurityContextHolder.getContext().getAuthentication().getName();
+        //String clientId = SecurityContextHolder.getContext().getAuthentication().getName();
 
         try {
             // Validar que la mascota pertenece al cliente
+            /*
             PetDTOs.PetResponse pet = petService.getPetById(request.getPetId());
             if (!pet.getOwnerId().equals(clientId)) {
                 throw new CustomExceptions.UnauthorizedException("No tienes permiso para agendar citas para esta mascota");
             }
+            */
+
 
             // Validar que la fecha es futura
             if (request.getAppointmentDate().before(new Date())) {
@@ -446,7 +449,7 @@ public class AppointmentService {
             Appointment appointment = Appointment.builder()
                     .id(UUID.randomUUID().toString())
                     .petId(request.getPetId())
-                    .clientId(clientId)
+                    .clientId(request.getClientId())
                     .veterinarianId(request.getVeterinarianId())
                     .appointmentDate(request.getAppointmentDate())
                     .reason(request.getReason())

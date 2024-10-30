@@ -4,6 +4,7 @@ import com.example.demo.dto.*;
 import com.example.demo.dto.UserDTOs.*;
 import com.example.demo.exception.CustomExceptions;
 import com.example.demo.service.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -21,6 +23,8 @@ public class UserController {
     @Autowired
     private UserService userService;
 
+    // En UserController.java
+    // En UserController.java
     @PreAuthorize("hasPermission(null, 'VER_USUARIOS')")
     @GetMapping
     public ResponseEntity<ApiResponse<PaginatedResponse<UserResponse>>> getAllUsers(
@@ -35,6 +39,22 @@ public class UserController {
                     .body(ApiResponse.error("PROCESSING_ERROR", e.getMessage()));
         }
     }
+
+    @GetMapping("/search")
+    @PreAuthorize("hasPermission(null, 'VER_USUARIOS')")
+    public ResponseEntity<ApiResponse<PaginatedResponse<UserResponse>>> searchUsers(
+            @RequestParam String searchTerm,
+            @ModelAttribute PaginationRequest paginationRequest) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success(
+                    userService.searchUsers(searchTerm, paginationRequest)));
+        } catch (Exception e) {
+            log.error("Error searching users:", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("PROCESSING_ERROR", e.getMessage()));
+        }
+    }
+
 
 
  /*

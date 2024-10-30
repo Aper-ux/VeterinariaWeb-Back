@@ -7,14 +7,17 @@ import com.example.demo.dto.PaginatedResponse;
 import com.example.demo.dto.PaginationRequest;
 import com.example.demo.service.AppointmentService;
 import jakarta.validation.Valid;
+
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.Date;
-import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/appointments")
 public class AppointmentController {
@@ -28,12 +31,20 @@ public class AppointmentController {
             @ModelAttribute PaginationRequest paginationRequest,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date date,
             @RequestParam String veterinarianId) {
-        if (date == null) {
-            date = new Date();
+        try {
+            log.info("Fetching daily appointments for date: {}, veterinarianId: {}", date, veterinarianId);
+            if (date == null) {
+                date = new Date();
+            }
+            return ResponseEntity.ok(ApiResponse.success(
+                    appointmentService.getVeterinarianDailyAppointments(veterinarianId, date, paginationRequest)));
+        } catch (Exception e) {
+            log.error("Error fetching daily appointments: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("INTERNAL_SERVER_ERROR", "Error fetching daily appointments."));
         }
-        return ResponseEntity.ok(ApiResponse.success(
-                appointmentService.getVeterinarianDailyAppointments(veterinarianId, date, paginationRequest)));
     }
+
     @GetMapping("/my-pets")
     @PreAuthorize("hasPermission('', 'VER_CITAS_MASCOTAS')")
     public ResponseEntity<ApiResponse<PaginatedResponse<AppointmentSummaryByPet>>> getClientPetsAppointments(
